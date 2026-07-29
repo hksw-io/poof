@@ -169,7 +169,11 @@ enum PoofSimulation {
     }
 
     return varied(
-      styled(glyph, pose: pose, index: index),
+      styled(
+        matchedOpeningScale(glyph, pose: pose),
+        pose: pose,
+        index: index
+      ),
       pose: pose,
       index: index,
       seed: variationSeed
@@ -924,6 +928,37 @@ enum PoofSimulation {
       opacity: glyph.opacity,
       contour: contour,
       paint: paint,
+      rotation: glyph.rotation,
+      tone: glyph.tone
+    )
+  }
+
+  private static func matchedOpeningScale(
+    _ glyph: PoofGlyph,
+    pose: PoofPose
+  ) -> PoofGlyph {
+    let scaleX: Double
+    let scaleY: Double
+
+    switch pose {
+    case .cloud:
+      scaleX = 1.18
+      scaleY = 1.05
+    case .clusters:
+      scaleX = 1.15
+      scaleY = 1.15
+    case .puffs, .wisps, .ringlets:
+      return glyph
+    }
+
+    return PoofGlyph(
+      x: glyph.x * scaleX,
+      y: glyph.y * scaleY,
+      width: glyph.width * scaleX,
+      height: glyph.height * scaleY,
+      opacity: glyph.opacity,
+      contour: glyph.contour,
+      paint: glyph.paint,
       rotation: glyph.rotation,
       tone: glyph.tone
     )

@@ -238,8 +238,8 @@ struct PoofCanvas: View {
                 x: center.x,
                 y: center.y - artSide * 0.035
               ),
-              width: artSide * 0.49,
-              height: artSide * 0.70,
+              width: artSide * 0.52,
+              height: artSide * 0.74,
               rotation: 0
             ),
             with: .color(palette.detail),

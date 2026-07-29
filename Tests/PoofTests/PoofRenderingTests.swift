@@ -256,6 +256,19 @@ struct PoofRenderingTests {
     #expect(first.normalizedDifference(from: second) < 0.08)
   }
 
+  @Test("Opening silhouettes match the measured reference size")
+  func openingSilhouetteSizes() throws {
+    let cloudImage = try #require(snapshot(progress: 0.1))
+    let clusterImage = try #require(snapshot(progress: 0.3))
+    let cloud = try #require(cloudImage.statistics.bounds)
+    let clusters = try #require(clusterImage.statistics.bounds)
+
+    #expect((79...83).contains(cloud.width))
+    #expect((72...76).contains(cloud.height))
+    #expect((76...80).contains(clusters.width))
+    #expect((72...76).contains(clusters.height))
+  }
+
   private func snapshot(
     progress: Double,
     colorScheme: ColorScheme = .light,
