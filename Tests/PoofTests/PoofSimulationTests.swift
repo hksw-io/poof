@@ -45,7 +45,7 @@ struct PoofSimulationTests {
     )
   }
 
-  @Test("Fixed poses and particle poses expose bounded work")
+  @Test("Every pose exposes bounded work")
   func glyphCounts() {
     let seed: UInt64 = 0x504F_4F46
     let configuration = PoofConfiguration(
@@ -66,18 +66,11 @@ struct PoofSimulationTests {
       ) == 4
     )
 
-    for pose in [PoofPose.puffs, .wisps, .ringlets] {
-      #expect(
-        PoofSimulation.glyphCount(
-          for: pose,
-          configuration: configuration
-        ) == configuration.particleCount
-      )
-    }
-
     #expect(glyphs(for: .cloud, in: configuration, seed: seed).count == 7)
     #expect(glyphs(for: .clusters, in: configuration, seed: seed).count == 4)
     #expect(glyphs(for: .puffs, in: configuration, seed: seed).count == 64)
+    #expect(glyphs(for: .wisps, in: configuration, seed: seed).count == 41)
+    #expect(glyphs(for: .ringlets, in: configuration, seed: seed).count == 30)
   }
 
   @Test("Later poses retain progressively fewer puffs")
@@ -99,38 +92,36 @@ struct PoofSimulationTests {
     #expect(puffs.count > wisps.count)
     #expect(wisps.count > ringlets.count)
     #expect(ringlets.isEmpty == false)
+    #expect(puffs.count == 64)
+    #expect(wisps.count == 41)
+    #expect(ringlets.count == 30)
+  }
 
-    for index in configuration.particles.indices {
-      let particle = configuration.particles[index]
+  @Test("Breakup poses use independently authored layouts")
+  func independentBreakupLayouts() {
+    let seed: UInt64 = 0x504F_4F46
+    let configuration = PoofConfiguration(seed: seed)
+    let puffs = glyphs(for: .puffs, in: configuration, seed: seed)
+    let wisps = glyphs(for: .wisps, in: configuration, seed: seed)
+    let ringlets = glyphs(
+      for: .ringlets,
+      in: configuration,
+      seed: seed
+    )
 
-      #expect(
-        PoofSimulation.glyph(
-          at: index,
-          pose: .puffs,
-          configuration: configuration,
-          variationSeed: seed
-        ) != nil
-      )
-      #expect(
-        (PoofSimulation.glyph(
-          at: index,
-          pose: .wisps,
-          configuration: configuration,
-          variationSeed: seed
-        ) != nil)
-          == (particle.lastPose.rawValue
-            >= PoofPose.wisps.rawValue)
-      )
-      #expect(
-        (PoofSimulation.glyph(
-          at: index,
-          pose: .ringlets,
-          configuration: configuration,
-          variationSeed: seed
-        ) != nil)
-          == (particle.lastPose == .ringlets)
-      )
-    }
+    #expect(puffs.count == 28)
+    #expect(wisps.count == 18)
+    #expect(ringlets.count == 13)
+    #expect(
+      zip(puffs, wisps).filter { puff, wisp in
+        hypot(puff.x - wisp.x, puff.y - wisp.y) > 0.04
+      }.count > 12
+    )
+    #expect(
+      zip(wisps, ringlets).filter { wisp, ringlet in
+        hypot(wisp.x - ringlet.x, wisp.y - ringlet.y) > 0.04
+      }.count > 8
+    )
   }
 
   @Test("Every drawable glyph remains finite and bounded")
@@ -184,8 +175,6 @@ struct PoofSimulationTests {
       particleCount: 24,
       seed: 0xCAFE_BABE
     )
-
-    #expect(firstConfiguration.particles == secondConfiguration.particles)
 
     for pose in PoofPose.allCases {
       let first = glyphs(
@@ -266,6 +255,30 @@ struct PoofSimulationTests {
       PoofSimulation.glyph(
         at: 4,
         pose: .clusters,
+        configuration: configuration,
+        variationSeed: 1
+      ) == nil
+    )
+    #expect(
+      PoofSimulation.glyph(
+        at: 28,
+        pose: .puffs,
+        configuration: configuration,
+        variationSeed: 1
+      ) == nil
+    )
+    #expect(
+      PoofSimulation.glyph(
+        at: 18,
+        pose: .wisps,
+        configuration: configuration,
+        variationSeed: 1
+      ) == nil
+    )
+    #expect(
+      PoofSimulation.glyph(
+        at: 13,
+        pose: .ringlets,
         configuration: configuration,
         variationSeed: 1
       ) == nil

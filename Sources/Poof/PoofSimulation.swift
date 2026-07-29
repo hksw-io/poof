@@ -8,22 +8,10 @@ enum PoofPose: Int, CaseIterable, Sendable {
   case ringlets
 }
 
-struct PoofParticle: Hashable, Sendable {
-  enum Tone: Int, Hashable, Sendable {
-    case light
-    case middle
-    case dark
-  }
-
-  let directionX: Double
-  let directionY: Double
-  let distance: Double
-  let diameter: Double
-  let aspectRatio: Double
-  let lobeCount: Int
-  let phase: Double
-  let lastPose: PoofPose
-  let tone: Tone
+enum PoofTone: Int, Hashable, Sendable {
+  case light
+  case middle
+  case dark
 }
 
 struct PoofGlyph: Equatable, Sendable {
@@ -34,7 +22,27 @@ struct PoofGlyph: Equatable, Sendable {
   let opacity: Double
   let lobeCount: Int
   let phase: Double
-  let tone: PoofParticle.Tone
+  let tone: PoofTone
+
+  init(
+    x: Double,
+    y: Double,
+    width: Double,
+    height: Double,
+    opacity: Double = 1,
+    lobeCount: Int = 5,
+    phase: Double = 0,
+    tone: PoofTone = .light
+  ) {
+    self.x = x
+    self.y = y
+    self.width = width
+    self.height = height
+    self.opacity = opacity
+    self.lobeCount = lobeCount
+    self.phase = phase
+    self.tone = tone
+  }
 }
 
 struct PoofFrameSet: Sendable {
@@ -57,21 +65,6 @@ struct PoofFrameSet: Sendable {
 enum PoofSimulation {
   static let frameDuration = 1.0 / 15.0
   static let duration = frameDuration * Double(PoofPose.allCases.count)
-
-  static func makeParticles(
-    count: Int,
-    spread: Double,
-    seed: UInt64
-  ) -> [PoofParticle] {
-    (0..<count).map { index in
-      makeParticle(
-        at: index,
-        count: count,
-        spread: spread,
-        seed: seed
-      )
-    }
-  }
 
   static func makeFrameSet(
     configuration: PoofConfiguration,
@@ -118,8 +111,18 @@ enum PoofSimulation {
       7
     case .clusters:
       4
-    case .puffs, .wisps, .ringlets:
-      configuration.particles.count
+    case .puffs:
+      configuration.particleCount
+    case .wisps:
+      breakupCount(
+        referenceCount: wispReferences.count,
+        configuration: configuration
+      )
+    case .ringlets:
+      breakupCount(
+        referenceCount: ringletReferences.count,
+        configuration: configuration
+      )
     }
   }
 
@@ -137,13 +140,10 @@ enum PoofSimulation {
     case .clusters:
       glyph = clusterGlyph(at: index)
     case .puffs, .wisps, .ringlets:
-      guard configuration.particles.indices.contains(index) else {
-        return nil
-      }
-
-      glyph = particleGlyph(
-        configuration.particles[index],
-        pose: pose
+      glyph = breakupGlyph(
+        at: index,
+        pose: pose,
+        configuration: configuration
       )
     }
 
@@ -156,59 +156,6 @@ enum PoofSimulation {
       pose: pose,
       index: index,
       seed: variationSeed
-    )
-  }
-
-  private static func makeParticle(
-    at index: Int,
-    count: Int,
-    spread: Double,
-    seed: UInt64
-  ) -> PoofParticle {
-    var random = SplitMix64(
-      seed: seed
-        &+ UInt64(index + 1) &* 0x9E37_79B9_7F4A_7C15
-    )
-    let slot = Double(index) / Double(count)
-    let angle =
-      2 * Double.pi
-      * (slot
-        + random.value(in: -0.42...0.42) / Double(count))
-    let longevity = random.value(in: 0...1)
-    let lastPose: PoofPose =
-      if longevity < 0.28 {
-        .puffs
-      } else if longevity < 0.54 {
-        .wisps
-      } else {
-        .ringlets
-      }
-    let toneValue = random.value(in: 0...1)
-    let tone: PoofParticle.Tone =
-      if toneValue < 0.56 {
-        .light
-      } else if toneValue < 0.86 {
-        .middle
-      } else {
-        .dark
-      }
-    let radialJitter =
-      random.value(in: -0.35...0.35) / Double(count)
-    let radialSample = min(
-      max(radicalInverse(index + 1) + radialJitter, 0.01),
-      0.99
-    )
-
-    return PoofParticle(
-      directionX: cos(angle),
-      directionY: sin(angle),
-      distance: spread * pow(radialSample, 0.82) * 0.48,
-      diameter: random.value(in: 0.05...0.24),
-      aspectRatio: random.value(in: 0.88...1.12),
-      lobeCount: Int(random.value(in: 4...6.999)),
-      phase: random.value(in: 0...(2 * Double.pi)),
-      lastPose: lastPose,
-      tone: tone
     )
   }
 
@@ -347,69 +294,570 @@ enum PoofSimulation {
     }
   }
 
-  private static func particleGlyph(
-    _ particle: PoofParticle,
-    pose: PoofPose
+  private static func breakupCount(
+    referenceCount: Int,
+    configuration: PoofConfiguration
+  ) -> Int {
+    max(
+      1,
+      Int(
+        (Double(configuration.particleCount)
+          * Double(referenceCount)
+          / Double(puffReferences.count)).rounded()
+      )
+    )
+  }
+
+  private static func breakupGlyph(
+    at index: Int,
+    pose: PoofPose,
+    configuration: PoofConfiguration
   ) -> PoofGlyph? {
-    let positionScaleX: Double
-    let positionScaleY: Double
-    let sizeScale: Double
-    let opacity: Double
-    let xOffset: Double
-    let yOffset: Double
-
-    switch pose {
-    case .puffs:
-      positionScaleX = 1.30
-      positionScaleY = 1.11
-      sizeScale = 0.78
-      opacity = 1
-      xOffset = 0
-      yOffset = 0
-    case .wisps:
-      guard particle.lastPose.rawValue >= PoofPose.wisps.rawValue else {
-        return nil
+    let references: [PoofGlyph] =
+      switch pose {
+      case .puffs:
+        puffReferences
+      case .wisps:
+        wispReferences
+      case .ringlets:
+        ringletReferences
+      case .cloud, .clusters:
+        []
       }
+    let count = glyphCount(for: pose, configuration: configuration)
 
-      positionScaleX = 0.92
-      positionScaleY = 1.04
-      sizeScale = 0.50
-      opacity = 1
-      xOffset = -0.01
-      yOffset = 0.015
-    case .ringlets:
-      guard particle.lastPose == .ringlets else {
-        return nil
-      }
-
-      positionScaleX = 1.25
-      positionScaleY = 0.90
-      sizeScale = 0.31
-      opacity = 0.96
-      xOffset = -0.04
-      yOffset = 0.015
-    case .cloud, .clusters:
+    guard
+      references.isEmpty == false,
+      (0..<count).contains(index)
+    else {
       return nil
     }
 
-    let x =
-      particle.directionX * particle.distance * positionScaleX
-      + xOffset
-    let y =
-      particle.directionY * particle.distance * positionScaleY
-      + yOffset
+    let referenceIndex =
+      if count <= references.count {
+        min(
+          Int(
+            (Double(index) + 0.5)
+              * Double(references.count)
+              / Double(count)
+          ),
+          references.count - 1
+        )
+      } else {
+        index % references.count
+      }
+    let reference = references[referenceIndex]
+    let spreadScale = configuration.spread / 0.82
+
+    guard index >= references.count else {
+      return PoofGlyph(
+        x: reference.x * spreadScale,
+        y: reference.y * spreadScale,
+        width: reference.width,
+        height: reference.height,
+        opacity: reference.opacity,
+        lobeCount: reference.lobeCount,
+        phase: reference.phase,
+        tone: reference.tone
+      )
+    }
+
+    let seed = configuration.seed ?? 0x504F_4F46
+    let key =
+      UInt64(pose.rawValue + 1) &* 0x1_0000
+      &+ UInt64(index + 1) &* 0x100
+    let sizeScale = 1 + noise(seed: seed, key: key &+ 3) * 0.08
 
     return PoofGlyph(
-      x: min(max(x, -0.58), 0.58),
-      y: min(max(y, -0.58), 0.58),
-      width: particle.diameter * particle.aspectRatio * sizeScale,
-      height: particle.diameter / particle.aspectRatio * sizeScale,
-      opacity: opacity,
-      lobeCount: particle.lobeCount,
-      phase: particle.phase,
-      tone: particle.tone
+      x: min(
+        max(
+          reference.x * spreadScale
+            + noise(seed: seed, key: key &+ 1) * 0.025,
+          -0.58
+        ),
+        0.58
+      ),
+      y: min(
+        max(
+          reference.y * spreadScale
+            + noise(seed: seed, key: key &+ 2) * 0.025,
+          -0.58
+        ),
+        0.58
+      ),
+      width: reference.width * sizeScale,
+      height: reference.height * sizeScale,
+      opacity: reference.opacity,
+      lobeCount: reference.lobeCount,
+      phase: reference.phase
+        + noise(seed: seed, key: key &+ 4) * 0.16,
+      tone: reference.tone
     )
   }
+
+  private static let puffReferences: [PoofGlyph] = [
+    PoofGlyph(
+      x: -0.143,
+      y: -0.393,
+      width: 0.075,
+      height: 0.075,
+      phase: 0.2
+    ),
+    PoofGlyph(
+      x: 0.117,
+      y: -0.371,
+      width: 0.085,
+      height: 0.075,
+      phase: 1.1
+    ),
+    PoofGlyph(
+      x: -0.013,
+      y: -0.294,
+      width: 0.125,
+      height: 0.105,
+      lobeCount: 6,
+      phase: 2.0
+    ),
+    PoofGlyph(
+      x: 0.215,
+      y: -0.239,
+      width: 0.135,
+      height: 0.155,
+      lobeCount: 6,
+      phase: 2.8,
+      tone: .middle
+    ),
+    PoofGlyph(
+      x: 0.354,
+      y: -0.153,
+      width: 0.055,
+      height: 0.065,
+      phase: 3.7
+    ),
+    PoofGlyph(
+      x: -0.340,
+      y: -0.062,
+      width: 0.095,
+      height: 0.085,
+      phase: 4.6
+    ),
+    PoofGlyph(
+      x: 0.330,
+      y: 0.060,
+      width: 0.085,
+      height: 0.120,
+      phase: 5.4,
+      tone: .middle
+    ),
+    PoofGlyph(
+      x: 0.330,
+      y: 0.200,
+      width: 0.075,
+      height: 0.100,
+      phase: 0.7
+    ),
+    PoofGlyph(
+      x: -0.249,
+      y: 0.228,
+      width: 0.115,
+      height: 0.095,
+      lobeCount: 6,
+      phase: 1.6
+    ),
+    PoofGlyph(
+      x: 0.142,
+      y: 0.314,
+      width: 0.095,
+      height: 0.085,
+      phase: 2.5
+    ),
+    PoofGlyph(
+      x: -0.155,
+      y: 0.346,
+      width: 0.085,
+      height: 0.075,
+      phase: 3.4
+    ),
+    PoofGlyph(
+      x: -0.190,
+      y: -0.160,
+      width: 0.150,
+      height: 0.140,
+      lobeCount: 6,
+      phase: 4.3
+    ),
+    PoofGlyph(
+      x: -0.070,
+      y: -0.190,
+      width: 0.160,
+      height: 0.135,
+      lobeCount: 6,
+      phase: 5.2
+    ),
+    PoofGlyph(
+      x: 0.070,
+      y: -0.180,
+      width: 0.145,
+      height: 0.150,
+      lobeCount: 6,
+      phase: 0.4,
+      tone: .middle
+    ),
+    PoofGlyph(
+      x: 0.180,
+      y: -0.140,
+      width: 0.145,
+      height: 0.135,
+      phase: 1.3
+    ),
+    PoofGlyph(
+      x: -0.220,
+      y: -0.040,
+      width: 0.145,
+      height: 0.150,
+      phase: 2.2
+    ),
+    PoofGlyph(
+      x: -0.100,
+      y: -0.070,
+      width: 0.170,
+      height: 0.160,
+      lobeCount: 6,
+      phase: 3.1,
+      tone: .middle
+    ),
+    PoofGlyph(
+      x: 0.030,
+      y: -0.070,
+      width: 0.165,
+      height: 0.145,
+      lobeCount: 6,
+      phase: 4.0
+    ),
+    PoofGlyph(
+      x: 0.160,
+      y: -0.020,
+      width: 0.150,
+      height: 0.145,
+      phase: 4.9
+    ),
+    PoofGlyph(
+      x: -0.190,
+      y: 0.090,
+      width: 0.145,
+      height: 0.135,
+      phase: 5.8
+    ),
+    PoofGlyph(
+      x: -0.060,
+      y: 0.050,
+      width: 0.175,
+      height: 0.165,
+      lobeCount: 6,
+      phase: 0.9
+    ),
+    PoofGlyph(
+      x: 0.070,
+      y: 0.070,
+      width: 0.160,
+      height: 0.155,
+      lobeCount: 6,
+      phase: 1.8,
+      tone: .middle
+    ),
+    PoofGlyph(
+      x: 0.190,
+      y: 0.100,
+      width: 0.145,
+      height: 0.135,
+      phase: 2.7
+    ),
+    PoofGlyph(
+      x: -0.150,
+      y: 0.190,
+      width: 0.145,
+      height: 0.140,
+      phase: 3.6
+    ),
+    PoofGlyph(
+      x: -0.020,
+      y: 0.170,
+      width: 0.165,
+      height: 0.155,
+      lobeCount: 6,
+      phase: 4.5
+    ),
+    PoofGlyph(
+      x: 0.110,
+      y: 0.200,
+      width: 0.145,
+      height: 0.140,
+      phase: 5.4
+    ),
+    PoofGlyph(
+      x: 0.020,
+      y: -0.010,
+      width: 0.180,
+      height: 0.170,
+      lobeCount: 6,
+      phase: 0.6,
+      tone: .dark
+    ),
+    PoofGlyph(
+      x: -0.020,
+      y: 0.275,
+      width: 0.125,
+      height: 0.105,
+      phase: 1.5
+    ),
+  ]
+
+  private static let wispReferences: [PoofGlyph] = [
+    PoofGlyph(
+      x: -0.199,
+      y: -0.359,
+      width: 0.045,
+      height: 0.055,
+      phase: 0.1
+    ),
+    PoofGlyph(
+      x: 0.114,
+      y: -0.320,
+      width: 0.055,
+      height: 0.045,
+      phase: 1.0
+    ),
+    PoofGlyph(
+      x: -0.056,
+      y: -0.280,
+      width: 0.110,
+      height: 0.075,
+      phase: 1.9,
+      tone: .middle
+    ),
+    PoofGlyph(
+      x: 0.170,
+      y: -0.243,
+      width: 0.065,
+      height: 0.075,
+      phase: 2.8
+    ),
+    PoofGlyph(
+      x: 0.253,
+      y: -0.159,
+      width: 0.060,
+      height: 0.060,
+      phase: 3.7
+    ),
+    PoofGlyph(
+      x: -0.245,
+      y: -0.148,
+      width: 0.140,
+      height: 0.155,
+      lobeCount: 6,
+      phase: 4.6
+    ),
+    PoofGlyph(
+      x: 0.159,
+      y: -0.074,
+      width: 0.115,
+      height: 0.115,
+      lobeCount: 6,
+      phase: 5.5,
+      tone: .middle
+    ),
+    PoofGlyph(
+      x: -0.021,
+      y: -0.066,
+      width: 0.140,
+      height: 0.140,
+      lobeCount: 6,
+      phase: 0.7
+    ),
+    PoofGlyph(
+      x: -0.298,
+      y: -0.014,
+      width: 0.040,
+      height: 0.040,
+      phase: 1.6
+    ),
+    PoofGlyph(
+      x: 0.073,
+      y: 0.055,
+      width: 0.140,
+      height: 0.115,
+      lobeCount: 6,
+      phase: 2.5
+    ),
+    PoofGlyph(
+      x: 0.301,
+      y: 0.057,
+      width: 0.040,
+      height: 0.040,
+      phase: 3.4
+    ),
+    PoofGlyph(
+      x: 0.230,
+      y: 0.092,
+      width: 0.050,
+      height: 0.050,
+      phase: 4.3
+    ),
+    PoofGlyph(
+      x: -0.177,
+      y: 0.102,
+      width: 0.180,
+      height: 0.115,
+      lobeCount: 6,
+      phase: 5.2,
+      tone: .middle
+    ),
+    PoofGlyph(
+      x: 0.220,
+      y: 0.233,
+      width: 0.140,
+      height: 0.160,
+      lobeCount: 6,
+      phase: 0.4
+    ),
+    PoofGlyph(
+      x: -0.151,
+      y: 0.246,
+      width: 0.075,
+      height: 0.055,
+      phase: 1.3
+    ),
+    PoofGlyph(
+      x: 0.054,
+      y: 0.246,
+      width: 0.095,
+      height: 0.095,
+      phase: 2.2
+    ),
+    PoofGlyph(
+      x: -0.092,
+      y: 0.338,
+      width: 0.040,
+      height: 0.030,
+      phase: 3.1
+    ),
+    PoofGlyph(
+      x: 0.115,
+      y: 0.356,
+      width: 0.040,
+      height: 0.040,
+      phase: 4.0
+    ),
+  ]
+
+  private static let ringletReferences: [PoofGlyph] = [
+    PoofGlyph(
+      x: -0.048,
+      y: -0.291,
+      width: 0.045,
+      height: 0.035,
+      opacity: 0.96,
+      phase: 0.3
+    ),
+    PoofGlyph(
+      x: 0.206,
+      y: -0.260,
+      width: 0.035,
+      height: 0.045,
+      opacity: 0.96,
+      phase: 1.2
+    ),
+    PoofGlyph(
+      x: -0.261,
+      y: -0.192,
+      width: 0.045,
+      height: 0.045,
+      opacity: 0.96,
+      phase: 2.1
+    ),
+    PoofGlyph(
+      x: 0.123,
+      y: -0.109,
+      width: 0.120,
+      height: 0.075,
+      opacity: 0.96,
+      lobeCount: 6,
+      phase: 3.0
+    ),
+    PoofGlyph(
+      x: -0.171,
+      y: -0.104,
+      width: 0.095,
+      height: 0.095,
+      opacity: 0.96,
+      phase: 3.9
+    ),
+    PoofGlyph(
+      x: -0.034,
+      y: -0.056,
+      width: 0.095,
+      height: 0.055,
+      opacity: 0.96,
+      phase: 4.8
+    ),
+    PoofGlyph(
+      x: -0.006,
+      y: 0.025,
+      width: 0.075,
+      height: 0.065,
+      opacity: 0.96,
+      phase: 5.7,
+      tone: .middle
+    ),
+    PoofGlyph(
+      x: -0.237,
+      y: 0.083,
+      width: 0.045,
+      height: 0.045,
+      opacity: 0.96,
+      phase: 0.9
+    ),
+    PoofGlyph(
+      x: 0.047,
+      y: 0.134,
+      width: 0.045,
+      height: 0.045,
+      opacity: 0.96,
+      phase: 1.8
+    ),
+    PoofGlyph(
+      x: -0.153,
+      y: 0.149,
+      width: 0.095,
+      height: 0.085,
+      opacity: 0.96,
+      phase: 2.7
+    ),
+    PoofGlyph(
+      x: 0.267,
+      y: 0.215,
+      width: 0.035,
+      height: 0.045,
+      opacity: 0.96,
+      phase: 3.6
+    ),
+    PoofGlyph(
+      x: -0.192,
+      y: 0.245,
+      width: 0.045,
+      height: 0.035,
+      opacity: 0.96,
+      phase: 4.5
+    ),
+    PoofGlyph(
+      x: 0.009,
+      y: 0.275,
+      width: 0.055,
+      height: 0.065,
+      opacity: 0.96,
+      phase: 5.4
+    ),
+  ]
 
   private static func varied(
     _ glyph: PoofGlyph,
@@ -455,23 +903,6 @@ enum PoofSimulation {
         ^ (key &* 0xD6E8_FEB8_6659_FD93)
     )
     return random.value(in: -1...1)
-  }
-
-  private static func radicalInverse(_ value: Int) -> Double {
-    var value = value
-    var result = 0.0
-    var place = 0.5
-
-    while value > 0 {
-      if value & 1 == 1 {
-        result += place
-      }
-
-      value >>= 1
-      place *= 0.5
-    }
-
-    return result
   }
 
   private static func normalized(_ value: Double) -> Double {

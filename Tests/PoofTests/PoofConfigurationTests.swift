@@ -41,7 +41,7 @@ struct PoofConfigurationTests {
 
     #expect(first.seed == nil)
     #expect(second.seed == nil)
-    #expect(first.particles == second.particles)
+    #expect(first == second)
   }
 
   @Test("An explicit seed is retained and repeatable")
@@ -52,8 +52,7 @@ struct PoofConfigurationTests {
 
     #expect(first.seed == 0xCAFE_BABE)
     #expect(first == second)
-    #expect(first.particles == second.particles)
-    #expect(first.particles != different.particles)
+    #expect(first != different)
   }
 
   @Test("Nonfinite dimensions resolve to defaults")
@@ -65,8 +64,5 @@ struct PoofConfigurationTests {
 
     #expect(configuration.spread == 0.82)
     #expect(configuration.fieldScale == 2.10)
-    #expect(
-      configuration.particles.allSatisfy { $0.distance.isFinite }
-    )
   }
 }

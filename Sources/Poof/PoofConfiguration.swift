@@ -26,8 +26,6 @@ public struct PoofConfiguration: Hashable, Sendable {
   /// a seed when repeatable output is required.
   public let seed: UInt64?
 
-  let particles: [PoofParticle]
-
   /// Creates a poof configuration.
   public init(
     particleCount: Int = 28,
@@ -46,10 +44,5 @@ public struct PoofConfiguration: Hashable, Sendable {
     self.spread = spread
     self.fieldScale = fieldScale
     self.seed = seed
-    particles = PoofSimulation.makeParticles(
-      count: particleCount,
-      spread: spread,
-      seed: seed ?? 0x504F_4F46
-    )
   }
 }

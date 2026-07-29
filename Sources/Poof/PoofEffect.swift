@@ -380,7 +380,7 @@ struct PoofPalette: Sendable {
     )
   }
 
-  func fill(for tone: PoofParticle.Tone) -> Color {
+  func fill(for tone: PoofTone) -> Color {
     switch tone {
     case .light:
       light
