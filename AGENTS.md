@@ -8,33 +8,46 @@ later.
 
 ## Design rules
 
-- Use Swift 6 language mode and strict concurrency-safe types.
+- Require Swift 6.3 or later, use Swift 6 language mode, and keep types
+  strict-concurrency safe.
 - Use current SwiftUI APIs. Do not add deprecated AppKit animation APIs,
   private frameworks, UIKit effects, Core Animation emitters, or timers.
-- Keep `PoofSimulation` deterministic and based on absolute normalized
-  progress. The same configuration and progress must produce the same frame.
-- Generate particle descriptors when a configuration is created. Do not add
-  per-frame random generation, mutable global state, or one SwiftUI view per
-  particle.
-- Keep particle count capped at 64 and the transition field reference dimension
-  capped at 160 points unless measurements and tests justify a change.
+- Preserve the clean-room five-pose sequence: full cloud, four clusters, dense
+  puffs, sparse wisps, then ringlets. Swap poses without interpolation at 15
+  frames per second; one playback lasts exactly one-third of a second.
+- Keep `PoofSimulation` based on absolute normalized progress. Progress and the
+  playback seed must fully determine the selected pose and its glyphs.
+- Choose optional variation once per playback and apply it coherently to every
+  pose. An explicit seed must produce repeatable output. Do not add per-frame
+  random generation, `hashValue` seeds, or mutable global state.
+- Generate breakup descriptors outside frame drawing. Keep glyph count capped
+  at 64 and use one `Canvas`, not one SwiftUI view per glyph.
+- Treat `fieldScale` as transparent overscan only. It must not change glyph
+  positions, dimensions, line widths, or shadow size. Keep the transition
+  reference dimension capped at 160 points unless measurements and tests
+  justify a change.
 - Keep insertion quiet. The poof is a removal effect.
-- Preserve the accessibility paths: Reduce Motion uses no spatial particle
-  drawing; Reduce Transparency uses no blur; Increased Contrast uses the
-  stronger palette and no blur.
-- Keep the particle canvas hidden from accessibility and hit testing. A view
+- Preserve the accessibility paths: Reduce Motion draws no spatial poses;
+  Reduce Transparency removes the blurred shadow; Increased Contrast uses
+  stronger outlines and detail marks.
+- Use the same grayscale artwork in light and dark appearance: white fills,
+  dark outlines, and neutral details.
+- Keep the drawing canvas hidden from accessibility and hit testing. A view
   being removed must not remain interactive or exposed to accessibility.
-- Do not copy private system assets, sounds, or implementation details.
+- Do not call private APIs, extract system artwork, copy system sounds, or add
+  sound playback. Recreate only measured public behavior with original vector
+  paths.
 
 ## Source map
 
-- `Sources/Poof/PoofConfiguration.swift`: public settings and precomputed
-  particle descriptors.
-- `Sources/Poof/PoofSimulation.swift`: deterministic particle generation and
-  frame math.
-- `Sources/Poof/PoofEffect.swift`: adaptive palette and `Canvas` renderer.
-- `Sources/Poof/PoofTransition.swift`: public transition, animation timing, and
-  bounded layout.
+- `Sources/Poof/PoofConfiguration.swift`: public density, reach, padding, and
+  playback seed settings.
+- `Sources/Poof/PoofSimulation.swift`: pose selection, seeded breakup
+  descriptors, and glyph variation.
+- `Sources/Poof/PoofEffect.swift`: grayscale vector paths and `Canvas`
+  renderer.
+- `Sources/Poof/PoofTransition.swift`: public transition, 15 fps timing, and
+  bounded overscan layout.
 - `Sources/PoofDemo`: interactive macOS sample.
 - `Tests/PoofTests`: simulation, layout, rendering, and transition tests.
 
@@ -44,8 +57,10 @@ later.
 - Use `make format` after editing Swift.
 - Add documentation comments for public API changes.
 - Add or update tests for behavior changes. Rendering changes need coverage for
-  light and dark appearance, accessibility settings, endpoints, and more than
-  one render scale when applicable.
+  all five pose boundaries, hard swaps, light and dark appearance,
+  accessibility settings, endpoints, and more than one render scale.
+- Test that changing `fieldScale` changes padding without scaling the artwork.
+  Test seeded repeatability and coherent unseeded playback variation separately.
 - Use Conventional Commits, such as `feat:`, `fix:`, `test:`, `docs:`, and
   `chore:`.
 - Keep generated build output out of git.

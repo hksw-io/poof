@@ -3,7 +3,7 @@ import SwiftUI
 /// A removal-only transition inspired by AppKit's former poof effect.
 ///
 /// The transition keeps insertion quiet. When Reduce Motion is enabled, it
-/// replaces particle travel with a fade.
+/// replaces the smoke poses with a fade.
 public struct PoofTransition: Sendable, Transition {
   private let configuration: PoofConfiguration
 
@@ -48,7 +48,7 @@ extension Transition where Self == PoofTransition {
 extension Animation {
   /// The timing curve tuned for ``PoofTransition``.
   public static var poof: Animation {
-    .easeOut(duration: 0.36)
+    .linear(duration: PoofSimulation.duration)
   }
 }
 
@@ -74,7 +74,6 @@ private struct AdaptivePoofModifier: ViewModifier {
         ),
         reducesMotion: reducesMotion,
         reducesTransparency: reducesTransparency,
-        usesBlur: !reducesTransparency && colorSchemeContrast != .increased,
         isRemoving: isRemoving
       )
     )
@@ -89,7 +88,6 @@ private struct PoofProgressModifier: ViewModifier {
   @AnimatableIgnored var palette: PoofPalette
   @AnimatableIgnored var reducesMotion: Bool
   @AnimatableIgnored var reducesTransparency: Bool
-  @AnimatableIgnored var usesBlur: Bool
   @AnimatableIgnored var isRemoving: Bool
 
   func body(content: Content) -> some View {
@@ -104,13 +102,13 @@ private struct PoofProgressModifier: ViewModifier {
             fieldScale: configuration.fieldScale
           )
 
-          PoofCanvas(
+          PoofPlayback(
             progress: progress,
             configuration: configuration,
             palette: palette,
             reducesMotion: reducesMotion,
             reducesTransparency: reducesTransparency,
-            usesBlur: usesBlur
+            artScale: configuration.fieldScale
           )
           .frame(width: side, height: side)
           .position(
@@ -128,12 +126,7 @@ private struct PoofProgressModifier: ViewModifier {
       return 1 - min(max(progress, 0), 1)
     }
 
-    return 1
-      - PoofSimulation.smoothstep(
-        edge0: 0,
-        edge1: 0.16,
-        value: progress
-      )
+    return progress > 0 ? 0 : 1
   }
 }
 

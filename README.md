@@ -1,9 +1,13 @@
 # Poof
 
-Poof recreates AppKit’s retired disappearing-item animation as a native
-SwiftUI transition for OS 26 and later. It is written in Swift 6, uses a
-deterministic `Canvas` particle field, and has no dependency on the deprecated
-`NSAnimationEffect` API.
+Poof brings AppKit’s retired disappearing-item animation to SwiftUI on OS 26
+and later. A clean-room `Canvas` renderer draws grayscale vector artwork based
+on the original effect’s visible behavior. It does not call the deprecated
+`NSAnimationEffect` API or ship copied system assets.
+
+The animation uses five hard-swapped poses at 15 frames per second: a full
+scalloped cloud, four clustered puffs, a dense breakup, sparse wisps, and final
+ringlets. One playback takes one-third of a second.
 
 ## Requirements
 
@@ -53,14 +57,15 @@ struct ExampleView: View {
 
 The transition affects removal only, so inserting the view again does not play
 the effect backward. The animation curve is separate from the transition; use
-`withAnimation(.poof)` for the intended 0.36-second timing.
+`withAnimation(.poof)` for the intended linear, one-third-second timing.
 
-Customize density, spread, field size, or the deterministic seed:
+Customize the later breakup poses, their reach, and the surrounding drawing
+room:
 
 ```swift
 let configuration = PoofConfiguration(
-  particleCount: 32,
-  spread: 0.9,
+  particleCount: 28,
+  spread: 0.86,
   fieldScale: 2.2,
   seed: 42
 )
@@ -68,7 +73,13 @@ let configuration = PoofConfiguration(
 content.transition(.poof(configuration))
 ```
 
-For a manually controlled effect, scrub `PoofEffect` between zero and one:
+Without a seed, Poof chooses a slight variation once per playback and carries
+it coherently through all five poses. Pass an explicit seed when tests,
+previews, or synchronized UI need repeatable artwork. `fieldScale` adds
+transparent padding around the drawing; it never enlarges the poof itself.
+
+For a manually controlled effect, scrub `PoofEffect` between zero and one.
+Values at either endpoint draw nothing:
 
 ```swift
 PoofEffect(progress: progress)
@@ -77,31 +88,31 @@ PoofEffect(progress: progress)
 
 ## Accessibility and appearance
 
-- Reduce Motion replaces particle travel with a short content fade.
-- Reduce Transparency removes blur and keeps particles denser and more opaque.
-- Increased Contrast uses stronger neutral values and disables blur.
-- Light and dark appearances use separate grayscale palettes.
+- Reduce Motion skips the five spatial poses and fades the content.
+- Reduce Transparency removes the soft shadow and keeps small shapes legible.
+- Increased Contrast strengthens the outline and internal marks.
+- The same white-fill, dark-outline artwork works in light and dark appearance.
 - The drawing is hidden from accessibility and never takes pointer events.
 - The removed view stops accepting input and leaves the accessibility tree as
   its transition starts.
 
-Poof does not add sound. An ancestor that clips its children can also clip the
-particle field; allow drawing outside that ancestor when the full cloud should
-remain visible.
+Poof does not play a sound. An ancestor that clips its children can also clip
+the drawing field; allow drawing outside that ancestor when the full cloud
+should remain visible.
 
 ## Performance
 
-Particle descriptors are generated once for each configuration. Animation
-frames use absolute progress and draw in one `Canvas` pass, with no timer,
-per-frame random generation, or view per particle. Particle and field sizes are
-bounded.
+Poof generates seeded glyph descriptors once at playback start. Every render
+selects one pose from absolute progress and draws it in one `Canvas`; there is
+no timer, per-frame random work, or SwiftUI view per glyph. Glyph count and
+field size stay bounded.
 
 ## Demo and checks
 
 Run the macOS demo:
 
 ```sh
-swift run PoofDemo
+make run
 ```
 
 Run formatting checks, debug tests, and release tests:

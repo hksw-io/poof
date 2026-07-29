@@ -3,180 +3,291 @@ import Testing
 
 @testable import Poof
 
-@Suite("Particle simulation")
+@Suite("Poof simulation")
 struct PoofSimulationTests {
-  @Test("A seed produces the same field every time")
-  func deterministicField() {
+  @Test("Five hard poses occupy consecutive progress intervals")
+  func poseBoundaries() {
+    let cases: [(progress: Double, expected: PoofPose?)] = [
+      (-1, nil),
+      (.nan, nil),
+      (0, nil),
+      (.leastNonzeroMagnitude, .cloud),
+      (0.199_999, .cloud),
+      (1.0 / 5.0, .clusters),
+      (0.399_999, .clusters),
+      (2.0 / 5.0, .puffs),
+      (0.599_999, .puffs),
+      (3.0 / 5.0, .wisps),
+      (0.799_999, .wisps),
+      (4.0 / 5.0, .ringlets),
+      (0.999_999, .ringlets),
+      (1, nil),
+      (.infinity, nil),
+    ]
+
+    for testCase in cases {
+      #expect(
+        PoofSimulation.pose(for: testCase.progress)
+          == testCase.expected
+      )
+    }
+  }
+
+  @Test("Each pose is held for one fifteenth of a second")
+  func timing() {
+    #expect(PoofPose.allCases.count == 5)
+    #expect(PoofSimulation.frameDuration == 1.0 / 15.0)
+    #expect(PoofSimulation.duration == 5.0 / 15.0)
+    #expect(
+      PoofSimulation.duration
+        == PoofSimulation.frameDuration
+        * Double(PoofPose.allCases.count)
+    )
+  }
+
+  @Test("Fixed poses and particle poses expose bounded work")
+  func glyphCounts() {
+    let seed: UInt64 = 0x504F_4F46
     let configuration = PoofConfiguration(
+      particleCount: 64,
+      seed: seed
+    )
+
+    #expect(
+      PoofSimulation.glyphCount(
+        for: .cloud,
+        configuration: configuration
+      ) == 7
+    )
+    #expect(
+      PoofSimulation.glyphCount(
+        for: .clusters,
+        configuration: configuration
+      ) == 4
+    )
+
+    for pose in [PoofPose.puffs, .wisps, .ringlets] {
+      #expect(
+        PoofSimulation.glyphCount(
+          for: pose,
+          configuration: configuration
+        ) == configuration.particleCount
+      )
+    }
+
+    #expect(glyphs(for: .cloud, in: configuration, seed: seed).count == 7)
+    #expect(glyphs(for: .clusters, in: configuration, seed: seed).count == 4)
+    #expect(glyphs(for: .puffs, in: configuration, seed: seed).count == 64)
+  }
+
+  @Test("Later poses retain progressively fewer puffs")
+  func survivalContraction() {
+    let seed: UInt64 = 0xCAFE_BABE
+    let configuration = PoofConfiguration(
+      particleCount: 64,
+      seed: seed
+    )
+    let puffs = glyphs(for: .puffs, in: configuration, seed: seed)
+    let wisps = glyphs(for: .wisps, in: configuration, seed: seed)
+    let ringlets = glyphs(
+      for: .ringlets,
+      in: configuration,
+      seed: seed
+    )
+
+    #expect(puffs.count == configuration.particleCount)
+    #expect(puffs.count > wisps.count)
+    #expect(wisps.count > ringlets.count)
+    #expect(ringlets.isEmpty == false)
+
+    for index in configuration.particles.indices {
+      let particle = configuration.particles[index]
+
+      #expect(
+        PoofSimulation.glyph(
+          at: index,
+          pose: .puffs,
+          configuration: configuration,
+          variationSeed: seed
+        ) != nil
+      )
+      #expect(
+        (PoofSimulation.glyph(
+          at: index,
+          pose: .wisps,
+          configuration: configuration,
+          variationSeed: seed
+        ) != nil)
+          == (particle.lastPose.rawValue
+            >= PoofPose.wisps.rawValue)
+      )
+      #expect(
+        (PoofSimulation.glyph(
+          at: index,
+          pose: .ringlets,
+          configuration: configuration,
+          variationSeed: seed
+        ) != nil)
+          == (particle.lastPose == .ringlets)
+      )
+    }
+  }
+
+  @Test("Every drawable glyph remains finite and bounded")
+  func finiteBoundedGlyphs() {
+    let configurations = [
+      PoofConfiguration(
+        particleCount: 12,
+        spread: 0.55,
+        seed: 1
+      ),
+      PoofConfiguration(
+        particleCount: 64,
+        spread: 1.10,
+        seed: .max
+      ),
+    ]
+
+    for configuration in configurations {
+      for seed in [UInt64.min, 0xCAFE_BABE, UInt64.max] {
+        for pose in PoofPose.allCases {
+          for glyph in glyphs(
+            for: pose,
+            in: configuration,
+            seed: seed
+          ) {
+            #expect(glyph.x.isFinite)
+            #expect(glyph.y.isFinite)
+            #expect(glyph.width.isFinite)
+            #expect(glyph.height.isFinite)
+            #expect(glyph.opacity.isFinite)
+            #expect(glyph.phase.isFinite)
+            #expect(abs(glyph.x) <= 0.60)
+            #expect(abs(glyph.y) <= 0.60)
+            #expect((0...1).contains(glyph.width))
+            #expect((0...1).contains(glyph.height))
+            #expect((0...1).contains(glyph.opacity))
+            #expect((4...10).contains(glyph.lobeCount))
+          }
+        }
+      }
+    }
+  }
+
+  @Test("A variation seed produces stable poses")
+  func stableVariation() {
+    let firstConfiguration = PoofConfiguration(
+      particleCount: 24,
+      seed: 0xCAFE_BABE
+    )
+    let secondConfiguration = PoofConfiguration(
       particleCount: 24,
       seed: 0xCAFE_BABE
     )
 
-    let first = particles(for: configuration)
-    let second = particles(for: configuration)
+    #expect(firstConfiguration.particles == secondConfiguration.particles)
 
-    #expect(first == second)
+    for pose in PoofPose.allCases {
+      let first = glyphs(
+        for: pose,
+        in: firstConfiguration,
+        seed: 0xCAFE_BABE
+      )
+      let second = glyphs(
+        for: pose,
+        in: secondConfiguration,
+        seed: 0xCAFE_BABE
+      )
+
+      #expect(first == second)
+    }
   }
 
-  @Test("Different seeds produce different fields")
-  func seedChangesField() {
-    let first = particles(
-      for: PoofConfiguration(particleCount: 24, seed: 1)
-    )
-    let second = particles(
-      for: PoofConfiguration(particleCount: 24, seed: 2)
-    )
-
-    #expect(first != second)
-  }
-
-  @Test("Particle values remain finite across the animation")
-  func finiteValues() {
+  @Test("Different playback seeds only make slight variations")
+  func boundedVariation() {
     let configuration = PoofConfiguration(
       particleCount: 64,
-      spread: 1.10,
-      fieldScale: 3
+      seed: 0x504F_4F46
     )
+    var changedGlyphCount = 0
 
-    for particle in particles(for: configuration) {
-      for progress in stride(from: -0.2, through: 1.2, by: 0.05) {
-        let state = PoofSimulation.state(
-          for: particle,
-          progress: progress,
-          reducesTransparency: false
+    for pose in PoofPose.allCases {
+      let first = glyphs(
+        for: pose,
+        in: configuration,
+        seed: 1
+      )
+      let second = glyphs(
+        for: pose,
+        in: configuration,
+        seed: 2
+      )
+
+      #expect(first.count == second.count)
+
+      for (firstGlyph, secondGlyph) in zip(first, second) {
+        if firstGlyph != secondGlyph {
+          changedGlyphCount += 1
+        }
+
+        #expect(abs(firstGlyph.x - secondGlyph.x) < 0.08)
+        #expect(abs(firstGlyph.y - secondGlyph.y) < 0.08)
+        #expect(
+          abs(firstGlyph.width - secondGlyph.width)
+            <= firstGlyph.width * 0.07
         )
-
-        #expect(state.x.isFinite)
-        #expect(state.y.isFinite)
-        #expect(state.width.isFinite)
-        #expect(state.height.isFinite)
-        #expect(state.opacity.isFinite)
-        #expect(state.width >= 0)
-        #expect(state.height >= 0)
-        #expect((0...1).contains(state.opacity))
-      }
-    }
-  }
-
-  @Test("The first and last frames are transparent")
-  func transparentEndpoints() {
-    let configuration = PoofConfiguration.standard
-
-    for particle in particles(for: configuration) {
-      let first = PoofSimulation.state(
-        for: particle,
-        progress: 0,
-        reducesTransparency: false
-      )
-      let last = PoofSimulation.state(
-        for: particle,
-        progress: 1,
-        reducesTransparency: false
-      )
-
-      #expect(first.opacity == 0)
-      #expect(last.opacity == 0)
-    }
-  }
-
-  @Test("Progress is clamped")
-  func progressClamping() {
-    let particle = PoofConfiguration.standard.particles[0]
-
-    let beforeStart = PoofSimulation.state(
-      for: particle,
-      progress: -10,
-      reducesTransparency: false
-    )
-    let start = PoofSimulation.state(
-      for: particle,
-      progress: 0,
-      reducesTransparency: false
-    )
-    let end = PoofSimulation.state(
-      for: particle,
-      progress: 1,
-      reducesTransparency: false
-    )
-    let afterEnd = PoofSimulation.state(
-      for: particle,
-      progress: 10,
-      reducesTransparency: false
-    )
-
-    #expect(beforeStart == start)
-    #expect(afterEnd == end)
-  }
-
-  @Test("Particles expand away from the origin")
-  func outwardTravel() {
-    let configuration = PoofConfiguration.standard
-    var outwardCount = 0
-    var earlyDistance = 0.0
-    var lateDistance = 0.0
-
-    for particle in particles(for: configuration) {
-      let early = PoofSimulation.state(
-        for: particle,
-        progress: 0.20,
-        reducesTransparency: false
-      )
-      let late = PoofSimulation.state(
-        for: particle,
-        progress: 0.70,
-        reducesTransparency: false
-      )
-      let earlyRadius = hypot(early.x, early.y)
-      let lateRadius = hypot(late.x, late.y)
-
-      earlyDistance += earlyRadius
-      lateDistance += lateRadius
-
-      if lateRadius > earlyRadius {
-        outwardCount += 1
+        #expect(
+          abs(firstGlyph.height - secondGlyph.height)
+            <= firstGlyph.height * 0.07
+        )
+        #expect(abs(firstGlyph.phase - secondGlyph.phase) <= 0.21)
+        #expect(firstGlyph.opacity == secondGlyph.opacity)
+        #expect(firstGlyph.lobeCount == secondGlyph.lobeCount)
+        #expect(firstGlyph.tone == secondGlyph.tone)
       }
     }
 
-    #expect(outwardCount >= configuration.particleCount * 4 / 5)
-    #expect(lateDistance > earlyDistance)
+    #expect(changedGlyphCount > 0)
   }
 
-  @Test("Reduce Transparency keeps smoke solid for longer")
-  func reduceTransparency() {
+  @Test("Out-of-range fixed glyph indices are absent")
+  func fixedGlyphBounds() {
     let configuration = PoofConfiguration.standard
 
-    for particle in particles(for: configuration) {
-      let standard = PoofSimulation.state(
-        for: particle,
-        progress: 0.60,
-        reducesTransparency: false
-      )
-      let reduced = PoofSimulation.state(
-        for: particle,
-        progress: 0.60,
-        reducesTransparency: true
-      )
+    #expect(
+      PoofSimulation.glyph(
+        at: 7,
+        pose: .cloud,
+        configuration: configuration,
+        variationSeed: 1
+      ) == nil
+    )
+    #expect(
+      PoofSimulation.glyph(
+        at: 4,
+        pose: .clusters,
+        configuration: configuration,
+        variationSeed: 1
+      ) == nil
+    )
+  }
 
-      #expect(reduced.opacity > standard.opacity)
+  private func glyphs(
+    for pose: PoofPose,
+    in configuration: PoofConfiguration,
+    seed: UInt64
+  ) -> [PoofGlyph] {
+    (0..<PoofSimulation.glyphCount(
+      for: pose,
+      configuration: configuration
+    ))
+    .compactMap { index in
+      PoofSimulation.glyph(
+        at: index,
+        pose: pose,
+        configuration: configuration,
+        variationSeed: seed
+      )
     }
-  }
-
-  @Test("Smoothstep has stable boundaries and midpoint")
-  func smoothstep() {
-    #expect(
-      PoofSimulation.smoothstep(edge0: 0, edge1: 1, value: -1) == 0
-    )
-    #expect(
-      PoofSimulation.smoothstep(edge0: 0, edge1: 1, value: 0.5) == 0.5
-    )
-    #expect(
-      PoofSimulation.smoothstep(edge0: 0, edge1: 1, value: 2) == 1
-    )
-  }
-
-  private func particles(
-    for configuration: PoofConfiguration
-  ) -> [PoofParticle] {
-    configuration.particles
   }
 }

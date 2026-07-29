@@ -28,6 +28,32 @@ struct PoofConfigurationTests {
   @Test("Standard configuration remains stable")
   func standardConfiguration() {
     #expect(PoofConfiguration.standard == PoofConfiguration())
+    #expect(PoofConfiguration.standard.particleCount == 28)
+    #expect(PoofConfiguration.standard.spread == 0.82)
+    #expect(PoofConfiguration.standard.fieldScale == 2.10)
+    #expect(PoofConfiguration.standard.seed == nil)
+  }
+
+  @Test("A nil seed uses stable shapes and allows playback variation")
+  func nilSeed() {
+    let first = PoofConfiguration()
+    let second = PoofConfiguration()
+
+    #expect(first.seed == nil)
+    #expect(second.seed == nil)
+    #expect(first.particles == second.particles)
+  }
+
+  @Test("An explicit seed is retained and repeatable")
+  func explicitSeed() {
+    let first = PoofConfiguration(seed: 0xCAFE_BABE)
+    let second = PoofConfiguration(seed: 0xCAFE_BABE)
+    let different = PoofConfiguration(seed: 0xDEAD_BEEF)
+
+    #expect(first.seed == 0xCAFE_BABE)
+    #expect(first == second)
+    #expect(first.particles == second.particles)
+    #expect(first.particles != different.particles)
   }
 
   @Test("Nonfinite dimensions resolve to defaults")

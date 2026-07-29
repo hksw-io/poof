@@ -20,17 +20,20 @@ public struct PoofConfiguration: Hashable, Sendable {
   /// Values outside `1.50...3.00` are clamped.
   public let fieldScale: Double
 
-  /// The seed used to derive the particle field.
-  public let seed: UInt64
+  /// The seed used to derive the smoke shapes.
+  ///
+  /// Leave this as `nil` to apply a slight variation to each playback. Supply
+  /// a seed when repeatable output is required.
+  public let seed: UInt64?
 
   let particles: [PoofParticle]
 
-  /// Creates a deterministic poof configuration.
+  /// Creates a poof configuration.
   public init(
-    particleCount: Int = 22,
+    particleCount: Int = 28,
     spread: Double = 0.82,
     fieldScale: Double = 2.10,
-    seed: UInt64 = 0x504F_4F46
+    seed: UInt64? = nil
   ) {
     let particleCount = min(max(particleCount, 12), 64)
     let spread = spread.isFinite ? min(max(spread, 0.55), 1.10) : 0.82
@@ -46,7 +49,7 @@ public struct PoofConfiguration: Hashable, Sendable {
     particles = PoofSimulation.makeParticles(
       count: particleCount,
       spread: spread,
-      seed: seed
+      seed: seed ?? 0x504F_4F46
     )
   }
 }
