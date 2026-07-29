@@ -34,7 +34,7 @@ struct PoofConfigurationTests {
     #expect(PoofConfiguration.standard.seed == nil)
   }
 
-  @Test("A nil seed uses stable shapes and allows playback variation")
+  @Test("A nil seed remains an unseeded configuration")
   func nilSeed() {
     let first = PoofConfiguration()
     let second = PoofConfiguration()

@@ -8,7 +8,6 @@ public struct PoofEffect: View {
   @Environment(\.accessibilityReduceMotion) private var reducesMotion
   @Environment(\.accessibilityReduceTransparency)
   private var reducesTransparency
-  @Environment(\.colorScheme) private var colorScheme
   @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
   private let progress: Double
@@ -30,10 +29,7 @@ public struct PoofEffect: View {
     PoofPlayback(
       progress: progress,
       configuration: configuration,
-      palette: PoofPalette(
-        colorScheme: colorScheme,
-        contrast: colorSchemeContrast
-      ),
+      palette: PoofPalette(contrast: colorSchemeContrast),
       reducesMotion: reducesMotion,
       reducesTransparency: reducesTransparency,
       artScale: 1
@@ -60,25 +56,27 @@ struct PoofPlayback: View {
       artScale: artScale,
       frameSet: frameSet
     )
-    .onAppear {
+    .onChange(of: configuration, initial: true) { _, configuration in
       guard frameSet?.configuration != configuration else {
         return
       }
 
-      frameSet = makeFrameSet(for: configuration)
-    }
-    .onChange(of: configuration) { _, newConfiguration in
-      frameSet = makeFrameSet(for: newConfiguration)
+      // Cache every pose together so one seed governs the whole playback and
+      // the Canvas never generates random values while drawing.
+      frameSet = Self.makeFrameSet(for: configuration)
     }
   }
 
-  private func makeFrameSet(
-    for configuration: PoofConfiguration
+  static func makeFrameSet(
+    for configuration: PoofConfiguration,
+    randomSeed: () -> UInt64 = {
+      UInt64.random(in: 1...UInt64.max)
+    }
   ) -> PoofFrameSet {
     PoofSimulation.makeFrameSet(
       configuration: configuration,
       variationSeed: configuration.seed
-        ?? UInt64.random(in: 1...UInt64.max)
+        ?? randomSeed()
     )
   }
 }
@@ -483,10 +481,7 @@ struct PoofPalette: Sendable {
   let detail: Color
   let shadow: Color
 
-  init(
-    colorScheme _: ColorScheme,
-    contrast: ColorSchemeContrast
-  ) {
+  init(contrast: ColorSchemeContrast) {
     let hasIncreasedContrast = contrast == .increased
 
     light = Color(white: 1, opacity: 1)

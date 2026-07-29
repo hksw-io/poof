@@ -56,7 +56,6 @@ private struct AdaptivePoofModifier: ViewModifier {
   @Environment(\.accessibilityReduceMotion) private var reducesMotion
   @Environment(\.accessibilityReduceTransparency)
   private var reducesTransparency
-  @Environment(\.colorScheme) private var colorScheme
   @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
   let progress: Double
@@ -68,10 +67,7 @@ private struct AdaptivePoofModifier: ViewModifier {
       PoofProgressModifier(
         progress: progress,
         configuration: configuration,
-        palette: PoofPalette(
-          colorScheme: colorScheme,
-          contrast: colorSchemeContrast
-        ),
+        palette: PoofPalette(contrast: colorSchemeContrast),
         reducesMotion: reducesMotion,
         reducesTransparency: reducesTransparency,
         isRemoving: isRemoving

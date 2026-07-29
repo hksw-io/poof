@@ -75,8 +75,8 @@ struct PoofRenderingTests {
     #expect(light.statistics.bounds == dark.statistics.bounds)
   }
 
-  @Test("Drawing waits for an unseeded playback variation")
-  func unseededPlaybackWaitsForVariation() throws {
+  @Test("Canvas waits for its precomputed frame set")
+  func canvasWaitsForFrameSet() throws {
     let waiting = try #require(
       snapshot(progress: 0.50, variationSeed: nil)
     )
@@ -86,6 +86,48 @@ struct PoofRenderingTests {
 
     #expect(waiting.statistics.alphaTotal == 0)
     #expect(ready.statistics.alphaTotal > 0)
+  }
+
+  @Test("A playback resolves one coherent variation seed")
+  func playbackSeedResolution() {
+    let randomSeed: UInt64 = 0x1234
+    let configuration = PoofConfiguration()
+    var randomSeedCalls = 0
+    let frameSet = PoofPlayback.makeFrameSet(
+      for: configuration
+    ) {
+      randomSeedCalls += 1
+      return randomSeed
+    }
+    let expected = PoofSimulation.makeFrameSet(
+      configuration: configuration,
+      variationSeed: randomSeed
+    )
+
+    #expect(randomSeedCalls == 1)
+    for pose in PoofPose.allCases {
+      #expect(frameSet.glyphs(for: pose) == expected.glyphs(for: pose))
+    }
+
+    let seededConfiguration = PoofConfiguration(seed: 0xCAFE_BABE)
+    let seededFrameSet = PoofPlayback.makeFrameSet(
+      for: seededConfiguration
+    ) {
+      randomSeedCalls += 1
+      return randomSeed
+    }
+    let seededExpected = PoofSimulation.makeFrameSet(
+      configuration: seededConfiguration,
+      variationSeed: 0xCAFE_BABE
+    )
+
+    #expect(randomSeedCalls == 1)
+    for pose in PoofPose.allCases {
+      #expect(
+        seededFrameSet.glyphs(for: pose)
+          == seededExpected.glyphs(for: pose)
+      )
+    }
   }
 
   @Test("Reduce Motion removes spatial drawing")
@@ -359,10 +401,7 @@ struct PoofRenderingTests {
     let configuration = PoofConfiguration(seed: 0x504F_4F46)
     let content = PoofCanvas(
       progress: progress,
-      palette: PoofPalette(
-        colorScheme: colorScheme,
-        contrast: contrast
-      ),
+      palette: PoofPalette(contrast: contrast),
       reducesMotion: reducesMotion,
       reducesTransparency: reducesTransparency,
       artScale: artScale,
@@ -373,6 +412,7 @@ struct PoofRenderingTests {
         )
       }
     )
+    .environment(\.colorScheme, colorScheme)
     .frame(width: width, height: height)
     let renderer = ImageRenderer(content: content)
     renderer.proposedSize = ProposedViewSize(width: width, height: height)
