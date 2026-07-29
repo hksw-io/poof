@@ -25,17 +25,8 @@ jobs:
       - name: Show toolchain
         run: swift --version
 
-      - name: Check formatting
-        run: swift format lint --strict --parallel --recursive Package.swift Sources Tests
-
-      - name: Run debug tests
-        run: swift test --parallel
-
-      - name: Build release products
-        run: swift build -c release
-
-      - name: Run release tests
-        run: swift test -c release --parallel
+      - name: Run checks
+        run: make check
 
   platforms:
     name: Build ${{ matrix.platform }}

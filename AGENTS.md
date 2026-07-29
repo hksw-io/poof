@@ -50,11 +50,15 @@ later.
   bounded overscan layout.
 - `Sources/PoofDemo`: interactive macOS sample.
 - `Tests/PoofTests`: simulation, layout, rendering, and transition tests.
+- `Tools/PoofMediaGenerator`: third-party-free generator for the assets in
+  `Documentation/Media`, including its own pixel-stability tests.
 
 ## Working agreement
 
 - Run `make check` before committing.
 - Use `make format` after editing Swift.
+- Run `make media` after changing the renderer or README media. The generator
+  must render the public `PoofEffect` API with a fixed seed.
 - Add documentation comments for public API changes.
 - Add or update tests for behavior changes. Rendering changes need coverage for
   all five pose boundaries, hard swaps, light and dark appearance,
