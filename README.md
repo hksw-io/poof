@@ -13,7 +13,7 @@ ringlets. One playback takes one-third of a second.
 
 ## Requirements
 
-- Xcode 26 or later
+- Xcode 26.4 or later
 - Swift 6.3 or later
 - iOS, macOS, tvOS, watchOS, or visionOS 26 or later
 

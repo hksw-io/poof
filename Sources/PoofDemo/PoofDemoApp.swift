@@ -22,6 +22,8 @@
     NSApplicationDelegate
   {
     func applicationDidFinishLaunching(_: Notification) {
+      // SwiftPM starts the demo as a command-line executable, so opt into
+      // normal app activation before bringing its first window forward.
       NSApplication.shared.setActivationPolicy(.regular)
       NSApplication.shared.activate()
     }

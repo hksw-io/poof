@@ -49,7 +49,7 @@
   private struct DemoItem: View {
     var body: some View {
       Image(systemName: "shippingbox.fill")
-        .font(.system(size: 64, weight: .semibold))
+        .font(.system(size: 64, weight: .semibold, design: .default))
         .foregroundStyle(.tint)
         .frame(width: 116, height: 116)
         .background(.tint.opacity(0.12), in: .rect(cornerRadius: 26))
