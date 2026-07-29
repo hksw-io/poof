@@ -935,9 +935,19 @@ enum PoofSimulation {
     index: Int,
     seed: UInt64
   ) -> PoofGlyph {
-    let rotation = noise(seed: seed, key: 1) * 0.035
-    let translationX = noise(seed: seed, key: 2) * 0.010
-    let translationY = noise(seed: seed, key: 3) * 0.010
+    let isOpeningPose =
+      pose == .cloud
+      || pose == .clusters
+    let rotationAmplitude = isOpeningPose ? 0.004 : 0.035
+    let translationAmplitude = isOpeningPose ? 0.002 : 0.010
+    let positionJitterAmplitude = isOpeningPose ? 0.001 : 0.006
+    let sizeVariationAmplitude = isOpeningPose ? 0.006 : 0.03
+    let glyphRotationAmplitude = isOpeningPose ? 0.012 : 0.10
+    let rotation = noise(seed: seed, key: 1) * rotationAmplitude
+    let translationX =
+      noise(seed: seed, key: 2) * translationAmplitude
+    let translationY =
+      noise(seed: seed, key: 3) * translationAmplitude
     let cosine = cos(rotation)
     let sine = sin(rotation)
     let rotatedX = glyph.x * cosine - glyph.y * sine
@@ -950,10 +960,17 @@ enum PoofSimulation {
         UInt64(0x500)
       }
     let key = poseKey &+ UInt64(index + 1) &* 0x10
-    let positionJitterX = noise(seed: seed, key: key &+ 1) * 0.006
-    let positionJitterY = noise(seed: seed, key: key &+ 2) * 0.006
-    let sizeVariation = 1 + noise(seed: seed, key: key &+ 3) * 0.03
-    let rotationVariation = noise(seed: seed, key: key &+ 4) * 0.10
+    let positionJitterX =
+      noise(seed: seed, key: key &+ 1) * positionJitterAmplitude
+    let positionJitterY =
+      noise(seed: seed, key: key &+ 2) * positionJitterAmplitude
+    let sizeVariation =
+      1
+      + noise(seed: seed, key: key &+ 3)
+      * sizeVariationAmplitude
+    let rotationVariation =
+      noise(seed: seed, key: key &+ 4)
+      * glyphRotationAmplitude
 
     return PoofGlyph(
       x: rotatedX + translationX + positionJitterX,

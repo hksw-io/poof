@@ -241,6 +241,56 @@ struct PoofSimulationTests {
     #expect(changedGlyphCount > 0)
   }
 
+  @Test("Opening poses stay canonical while breakup poses vary")
+  func variationConcentratesInBreakup() {
+    let configuration = PoofConfiguration(seed: 0x504F_4F46)
+    var openingDistances: [Double] = []
+    var breakupDistances: [Double] = []
+
+    for pose in PoofPose.allCases {
+      let first = glyphs(
+        for: pose,
+        in: configuration,
+        seed: 0x1111
+      )
+      let second = glyphs(
+        for: pose,
+        in: configuration,
+        seed: 0x2222
+      )
+
+      for (firstGlyph, secondGlyph) in zip(first, second) {
+        let distance = hypot(
+          firstGlyph.x - secondGlyph.x,
+          firstGlyph.y - secondGlyph.y
+        )
+
+        if pose == .cloud || pose == .clusters {
+          openingDistances.append(distance)
+          #expect(distance < 0.012)
+          #expect(
+            abs(firstGlyph.width - secondGlyph.width)
+              < firstGlyph.width * 0.015
+          )
+          #expect(
+            abs(firstGlyph.rotation - secondGlyph.rotation) < 0.025
+          )
+        } else {
+          breakupDistances.append(distance)
+        }
+      }
+    }
+
+    let openingAverage =
+      openingDistances.reduce(0, +)
+      / Double(openingDistances.count)
+    let breakupAverage =
+      breakupDistances.reduce(0, +)
+      / Double(breakupDistances.count)
+
+    #expect(breakupAverage > openingAverage * 2)
+  }
+
   @Test("The sequence uses every organic contour")
   func contourCoverage() {
     let seed: UInt64 = 0x504F_4F46
