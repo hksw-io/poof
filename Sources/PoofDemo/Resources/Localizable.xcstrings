@@ -1,0 +1,39 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Appearance" : {
+      "comment" : "Label for the demo appearance picker."
+    },
+    "Dark" : {
+      "comment" : "Appearance option that uses dark mode."
+    },
+    "Light" : {
+      "comment" : "Appearance option that uses light mode."
+    },
+    "Package" : {
+      "comment" : "Accessibility label for the demo item."
+    },
+    "Poof" : {
+      "comment" : "Button that removes the demo item with a poof."
+    },
+    "Reduce Motion off" : {
+      "comment" : "Status shown when Reduce Motion is disabled."
+    },
+    "Reduce Motion on" : {
+      "comment" : "Status shown when Reduce Motion is enabled."
+    },
+    "Reduce Transparency off" : {
+      "comment" : "Status shown when Reduce Transparency is disabled."
+    },
+    "Reduce Transparency on" : {
+      "comment" : "Status shown when Reduce Transparency is enabled."
+    },
+    "Restore" : {
+      "comment" : "Button that restores the removed demo item."
+    },
+    "System" : {
+      "comment" : "Appearance option that follows the system."
+    }
+  },
+  "version" : "1.0"
+}
