@@ -83,6 +83,10 @@ enum PoofSimulation {
   static let frameDuration = 1.0 / 15.0
   static let duration = frameDuration * Double(PoofPose.allCases.count)
 
+  private static let referenceSpread = 0.82
+  // Extra glyph placement needs a stable base before playback variation.
+  private static let fallbackLayoutSeed: UInt64 = 0x504F_4F46
+
   static func makeFrameSet(
     configuration: PoofConfiguration,
     variationSeed: UInt64
@@ -184,6 +188,8 @@ enum PoofSimulation {
     )
   }
 
+  // MARK: - Opening layouts
+
   private static func cloudGlyph(at index: Int) -> PoofGlyph? {
     switch index {
     case 0:
@@ -192,9 +198,7 @@ enum PoofSimulation {
         y: -0.25,
         width: 0.36,
         height: 0.25,
-        opacity: 1,
-        rotation: 0.18,
-        tone: .light
+        rotation: 0.18
       )
     case 1:
       PoofGlyph(
@@ -202,9 +206,7 @@ enum PoofSimulation {
         y: -0.10,
         width: 0.38,
         height: 0.34,
-        opacity: 1,
-        rotation: 1.12,
-        tone: .light
+        rotation: 1.12
       )
     case 2:
       PoofGlyph(
@@ -212,9 +214,7 @@ enum PoofSimulation {
         y: -0.10,
         width: 0.38,
         height: 0.34,
-        opacity: 1,
-        rotation: 2.06,
-        tone: .light
+        rotation: 2.06
       )
     case 3:
       PoofGlyph(
@@ -222,9 +222,7 @@ enum PoofSimulation {
         y: 0.14,
         width: 0.36,
         height: 0.34,
-        opacity: 1,
-        rotation: 2.84,
-        tone: .light
+        rotation: 2.84
       )
     case 4:
       PoofGlyph(
@@ -232,9 +230,7 @@ enum PoofSimulation {
         y: 0.14,
         width: 0.36,
         height: 0.34,
-        opacity: 1,
-        rotation: 3.62,
-        tone: .light
+        rotation: 3.62
       )
     case 5:
       PoofGlyph(
@@ -242,9 +238,7 @@ enum PoofSimulation {
         y: 0.24,
         width: 0.50,
         height: 0.32,
-        opacity: 1,
-        rotation: 4.40,
-        tone: .light
+        rotation: 4.40
       )
     case 6:
       PoofGlyph(
@@ -252,9 +246,7 @@ enum PoofSimulation {
         y: -0.015,
         width: 0.68,
         height: 0.51,
-        opacity: 1,
-        rotation: 5.18,
-        tone: .light
+        rotation: 5.18
       )
     default:
       nil
@@ -269,9 +261,7 @@ enum PoofSimulation {
         y: -0.20,
         width: 0.40,
         height: 0.36,
-        opacity: 1,
-        rotation: 0.20,
-        tone: .light
+        rotation: 0.20
       )
     case 1:
       PoofGlyph(
@@ -279,9 +269,7 @@ enum PoofSimulation {
         y: -0.22,
         width: 0.41,
         height: 0.40,
-        opacity: 1,
-        rotation: 1.04,
-        tone: .light
+        rotation: 1.04
       )
     case 2:
       PoofGlyph(
@@ -289,7 +277,6 @@ enum PoofSimulation {
         y: 0.18,
         width: 0.42,
         height: 0.38,
-        opacity: 1,
         rotation: 1.86,
         tone: .middle
       )
@@ -299,25 +286,28 @@ enum PoofSimulation {
         y: 0.17,
         width: 0.41,
         height: 0.38,
-        opacity: 1,
-        rotation: 2.68,
-        tone: .light
+        rotation: 2.68
       )
     default:
       nil
     }
   }
 
+  // MARK: - Breakup layouts
+
   private static func breakupCount(
     referenceCount: Int,
     configuration: PoofConfiguration
   ) -> Int {
-    max(
-      1,
-      Int(
-        (Double(configuration.particleCount)
-          * Double(referenceCount)
-          / Double(puffReferences.count)).rounded()
+    min(
+      configuration.particleCount,
+      max(
+        1,
+        Int(
+          (Double(configuration.particleCount)
+            * Double(referenceCount)
+            / Double(puffReferences.count)).rounded()
+        )
       )
     )
   }
@@ -361,7 +351,7 @@ enum PoofSimulation {
         index % references.count
       }
     let reference = references[referenceIndex]
-    let spreadScale = configuration.spread / 0.82
+    let spreadScale = configuration.spread / referenceSpread
 
     guard index >= references.count else {
       return PoofGlyph(
@@ -377,7 +367,7 @@ enum PoofSimulation {
       )
     }
 
-    let seed = configuration.seed ?? 0x504F_4F46
+    let seed = configuration.seed ?? fallbackLayoutSeed
     let key =
       UInt64(pose.rawValue + 1) &* 0x1_0000
       &+ UInt64(index + 1) &* 0x100
@@ -411,6 +401,8 @@ enum PoofSimulation {
     )
   }
 
+  // These ordered, normalized descriptors encode the measured breakup
+  // layouts. Their indices also select contour and paint styles below.
   private static let puffReferences: [PoofGlyph] = [
     PoofGlyph(
       x: -0.143,
@@ -856,6 +848,8 @@ enum PoofSimulation {
     ),
   ]
 
+  // MARK: - Styling and variation
+
   private static func styled(
     _ glyph: PoofGlyph,
     pose: PoofPose,
@@ -942,6 +936,8 @@ enum PoofSimulation {
     pose: PoofPose,
     index: Int
   ) -> PoofGlyph {
+    // Calibrate the authored vectors to the clean-room measurement envelopes
+    // asserted by the rendering tests.
     let positionScaleX: Double
     let positionScaleY: Double
     let sizeScaleX: Double
@@ -1028,6 +1024,7 @@ enum PoofSimulation {
       case .cloud, .clusters:
         UInt64(pose.rawValue + 1) &* 0x100
       case .puffs, .wisps, .ringlets:
+        // Shared keys carry each glyph's variation through every breakup pose.
         UInt64(0x500)
       }
     let key = poseKey &+ UInt64(index + 1) &* 0x10
@@ -1057,6 +1054,7 @@ enum PoofSimulation {
   }
 
   private static func noise(seed: UInt64, key: UInt64) -> Double {
+    // Counter-based noise stays deterministic without mutable random state.
     var random = SplitMix64(
       seed: seed
         ^ (key &* 0xD6E8_FEB8_6659_FD93)

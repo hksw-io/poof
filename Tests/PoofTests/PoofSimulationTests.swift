@@ -71,6 +71,21 @@ struct PoofSimulationTests {
     #expect(glyphs(for: .puffs, in: configuration, seed: seed).count == 64)
     #expect(glyphs(for: .wisps, in: configuration, seed: seed).count == 41)
     #expect(glyphs(for: .ringlets, in: configuration, seed: seed).count == 30)
+
+    for particleCount in [12, 64] {
+      let boundedConfiguration = PoofConfiguration(
+        particleCount: particleCount
+      )
+
+      for pose in PoofPose.allCases {
+        #expect(
+          PoofSimulation.glyphCount(
+            for: pose,
+            configuration: boundedConfiguration
+          ) <= boundedConfiguration.particleCount
+        )
+      }
+    }
   }
 
   @Test("Later poses retain progressively fewer puffs")

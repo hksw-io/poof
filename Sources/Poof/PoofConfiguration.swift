@@ -5,19 +5,22 @@ public struct PoofConfiguration: Hashable, Sendable {
   /// A balanced effect for controls, rows, and icons.
   public static let standard = PoofConfiguration()
 
-  /// The number of smoke particles.
+  /// The number of glyphs in the dense breakup pose.
   ///
-  /// Values outside `12...64` are clamped to keep drawing work bounded.
+  /// Later poses retain proportionally fewer glyphs. The initializer clamps
+  /// values outside `12...64` to keep drawing work bounded.
   public let particleCount: Int
 
-  /// How widely smoke is distributed relative to the drawing field.
+  /// How widely breakup glyphs are distributed.
   ///
-  /// Values outside `0.55...1.10` are clamped.
+  /// The opening silhouettes stay fixed. The initializer clamps values outside
+  /// `0.55...1.10`.
   public let spread: Double
 
-  /// The size of the drawing field relative to the disappearing view.
+  /// The transparent drawing overscan relative to the disappearing view.
   ///
-  /// Values outside `1.50...3.00` are clamped.
+  /// This does not scale the artwork. The initializer clamps values outside
+  /// `1.50...3.00`.
   public let fieldScale: Double
 
   /// The seed used to derive the smoke shapes.
