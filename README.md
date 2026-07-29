@@ -8,7 +8,7 @@ deterministic `Canvas` particle field, and has no dependency on the deprecated
 ## Requirements
 
 - Xcode 26 or later
-- Swift 6.2 or later
+- Swift 6.3 or later
 - iOS, macOS, tvOS, watchOS, or visionOS 26 or later
 
 ## Add the package
