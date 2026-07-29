@@ -131,7 +131,7 @@ struct PoofCanvas: View {
           reducesTransparency
           ? max(glyph.opacity, 0.88)
           : glyph.opacity
-        let path = scallopedPath(
+        let path = contourPath(
           for: glyph,
           center: center,
           artSide: artSide
@@ -140,31 +140,35 @@ struct PoofCanvas: View {
         if !reducesTransparency {
           var glyphShadowContext = shadowContext
           glyphShadowContext.opacity = opacity
-          glyphShadowContext.fill(
-            path.applying(
-              CGAffineTransform(
-                translationX: 0,
-                y: artSide * 0.018
-              )
-            ),
-            with: .color(palette.shadow)
+          let shadowPath = path.applying(
+            CGAffineTransform(
+              translationX: 0,
+              y: artSide * 0.018
+            )
           )
+
+          if glyph.paint == .doubleStroke {
+            glyphShadowContext.stroke(
+              shadowPath,
+              with: .color(palette.shadow),
+              style: StrokeStyle(
+                lineWidth: outlineWidth * 2.15,
+                lineCap: .round,
+                lineJoin: .round
+              )
+            )
+          } else {
+            glyphShadowContext.fill(
+              shadowPath,
+              with: .color(palette.shadow)
+            )
+          }
         }
 
         var glyphContext = context
         glyphContext.opacity = opacity
-        if pose == .ringlets, index.isMultiple(of: 3) {
-          glyphContext.stroke(
-            path,
-            with: .color(palette.outline),
-            lineWidth: outlineWidth * 1.65
-          )
-          glyphContext.stroke(
-            path,
-            with: .color(palette.fill(for: glyph.tone)),
-            lineWidth: outlineWidth * 0.72
-          )
-        } else {
+        switch glyph.paint {
+        case .fillAndOutline, .fillOutlineAndInset:
           glyphContext.fill(
             path,
             with: .color(palette.fill(for: glyph.tone))
@@ -174,23 +178,76 @@ struct PoofCanvas: View {
             with: .color(palette.outline),
             lineWidth: outlineWidth
           )
+
+          if glyph.paint == .fillOutlineAndInset {
+            glyphContext.stroke(
+              contourPath(
+                for: glyph,
+                center: center,
+                artSide: artSide,
+                scale: 0.46
+              ),
+              with: .color(palette.detail),
+              style: StrokeStyle(
+                lineWidth: detailWidth,
+                lineCap: .round,
+                lineJoin: .round
+              )
+            )
+          }
+        case .doubleStroke:
+          glyphContext.stroke(
+            path,
+            with: .color(palette.outline),
+            style: StrokeStyle(
+              lineWidth: outlineWidth * 1.65,
+              lineCap: .round,
+              lineJoin: .round
+            )
+          )
+          glyphContext.stroke(
+            path,
+            with: .color(palette.fill(for: glyph.tone)),
+            style: StrokeStyle(
+              lineWidth: outlineWidth * 0.72,
+              lineCap: .round,
+              lineJoin: .round
+            )
+          )
         }
 
         if pose == .clusters {
           glyphContext.stroke(
-            puffDetailPath(
+            curlDetailPath(
               for: glyph,
               center: center,
               artSide: artSide
             ),
             with: .color(palette.detail),
-            lineWidth: detailWidth
+            style: StrokeStyle(
+              lineWidth: detailWidth,
+              lineCap: .round,
+              lineJoin: .round
+            )
           )
         } else if pose == .cloud, index == glyphs.count - 1 {
           glyphContext.stroke(
-            cloudDetailPath(center: center, artSide: artSide),
+            transformedPath(
+              contour: .curl,
+              center: CGPoint(
+                x: center.x,
+                y: center.y - artSide * 0.035
+              ),
+              width: artSide * 0.49,
+              height: artSide * 0.70,
+              rotation: 0
+            ),
             with: .color(palette.detail),
-            lineWidth: detailWidth
+            style: StrokeStyle(
+              lineWidth: detailWidth,
+              lineCap: .round,
+              lineJoin: .round
+            )
           )
         }
       }
@@ -199,154 +256,223 @@ struct PoofCanvas: View {
     .accessibilityHidden(true)
   }
 
-  private func scallopedPath(
+  private func contourPath(
     for glyph: PoofGlyph,
     center: CGPoint,
-    artSide: Double
+    artSide: Double,
+    scale: Double = 1
   ) -> Path {
-    let sampleCount = max(glyph.lobeCount * 8, 24)
     let glyphCenter = CGPoint(
       x: center.x + artSide * glyph.x,
       y: center.y + artSide * glyph.y
     )
-    var points: [CGPoint] = []
-    points.reserveCapacity(sampleCount)
+    let curlHeightScale = glyph.contour == .curl ? 1.60 : 1
 
-    for sample in 0..<sampleCount {
-      let angle =
-        Double(sample) / Double(sampleCount)
-        * 2 * Double.pi
-      let lobeAmplitude =
-        glyph.lobeCount <= 6
-        ? 0.06
-        : 0.045
-      let radius =
-        0.48
-        + lobeAmplitude
-        * cos(Double(glyph.lobeCount) * angle + glyph.phase)
-        + 0.012 * cos(3 * angle - 0.4)
-      points.append(
-        CGPoint(
-          x: glyphCenter.x
-            + artSide * glyph.width * radius * cos(angle),
-          y: glyphCenter.y
-            + artSide * glyph.height * radius * sin(angle)
+    return transformedPath(
+      contour: glyph.contour,
+      center: glyphCenter,
+      width: artSide * glyph.width * scale,
+      height: artSide * glyph.height * scale * curlHeightScale,
+      rotation: glyph.rotation
+    )
+  }
+
+  private func curlDetailPath(
+    for glyph: PoofGlyph,
+    center: CGPoint,
+    artSide: Double
+  ) -> Path {
+    let glyphCenter = CGPoint(
+      x: center.x + artSide * glyph.x,
+      y: center.y + artSide * glyph.y
+    )
+
+    return transformedPath(
+      contour: .curl,
+      center: glyphCenter,
+      width: artSide * glyph.width * 0.49,
+      height: artSide * glyph.height * 0.65,
+      rotation: indexRotation(for: glyph)
+    )
+  }
+
+  private func indexRotation(for glyph: PoofGlyph) -> Double {
+    glyph.x < 0 ? 0.08 : -0.08
+  }
+
+  private func transformedPath(
+    contour: PoofContour,
+    center: CGPoint,
+    width: Double,
+    height: Double,
+    rotation: Double
+  ) -> Path {
+    Self.unitPath(for: contour)
+      .applying(
+        CGAffineTransform(
+          scaleX: width,
+          y: height
         )
       )
-    }
+      .applying(
+        CGAffineTransform(rotationAngle: rotation)
+      )
+      .applying(
+        CGAffineTransform(
+          translationX: center.x,
+          y: center.y
+        )
+      )
+  }
 
-    guard let first = points.first, let last = points.last else {
-      return Path()
+  private static func unitPath(for contour: PoofContour) -> Path {
+    switch contour {
+    case .puff4:
+      puff4Path
+    case .puff5:
+      puff5Path
+    case .ring:
+      ringPath
+    case .curl:
+      curlPath
+    case .fleck:
+      fleckPath
     }
+  }
 
+  private static let puff4Path: Path = {
     var path = Path()
-    path.move(
-      to: CGPoint(
-        x: (last.x + first.x) / 2,
-        y: (last.y + first.y) / 2
-      )
+    path.move(to: CGPoint(x: 0, y: -0.31))
+    path.addCurve(
+      to: CGPoint(x: 0.31, y: 0),
+      control1: CGPoint(x: 0.17, y: -0.48),
+      control2: CGPoint(x: 0.45, y: -0.32)
     )
-
-    for index in points.indices {
-      let point = points[index]
-      let next = points[(index + 1) % points.count]
-      path.addQuadCurve(
-        to: CGPoint(
-          x: (point.x + next.x) / 2,
-          y: (point.y + next.y) / 2
-        ),
-        control: point
-      )
-    }
-
+    path.addCurve(
+      to: CGPoint(x: 0, y: 0.33),
+      control1: CGPoint(x: 0.48, y: 0.16),
+      control2: CGPoint(x: 0.31, y: 0.47)
+    )
+    path.addCurve(
+      to: CGPoint(x: -0.32, y: 0),
+      control1: CGPoint(x: -0.17, y: 0.48),
+      control2: CGPoint(x: -0.47, y: 0.31)
+    )
+    path.addCurve(
+      to: CGPoint(x: 0, y: -0.31),
+      control1: CGPoint(x: -0.48, y: -0.16),
+      control2: CGPoint(x: -0.31, y: -0.46)
+    )
     path.closeSubpath()
     return path
-  }
+  }()
 
-  private func puffDetailPath(
-    for glyph: PoofGlyph,
-    center: CGPoint,
-    artSide: Double
-  ) -> Path {
-    let glyphCenter = CGPoint(
-      x: center.x + artSide * glyph.x,
-      y: center.y + artSide * glyph.y
-    )
-    let width = artSide * glyph.width
-    let height = artSide * glyph.height
+  private static let puff5Path: Path = {
     var path = Path()
-    path.move(
-      to: CGPoint(
-        x: glyphCenter.x - width * 0.22,
-        y: glyphCenter.y
-      )
+    path.move(to: CGPoint(x: 0, y: -0.32))
+    path.addCurve(
+      to: CGPoint(x: 0.314, y: -0.102),
+      control1: CGPoint(x: 0.184, y: -0.454),
+      control2: CGPoint(x: 0.375, y: -0.315)
     )
-    path.addQuadCurve(
-      to: CGPoint(
-        x: glyphCenter.x,
-        y: glyphCenter.y - height * 0.025
-      ),
-      control: CGPoint(
-        x: glyphCenter.x - width * 0.11,
-        y: glyphCenter.y - height * 0.19
-      )
+    path.addCurve(
+      to: CGPoint(x: 0.188, y: 0.259),
+      control1: CGPoint(x: 0.507, y: 0.053),
+      control2: CGPoint(x: 0.442, y: 0.255)
     )
-    path.addQuadCurve(
-      to: CGPoint(
-        x: glyphCenter.x + width * 0.22,
-        y: glyphCenter.y
-      ),
-      control: CGPoint(
-        x: glyphCenter.x + width * 0.11,
-        y: glyphCenter.y - height * 0.19
-      )
+    path.addCurve(
+      to: CGPoint(x: -0.200, y: 0.275),
+      control1: CGPoint(x: 0.100, y: 0.469),
+      control2: CGPoint(x: -0.100, y: 0.469)
+    )
+    path.addCurve(
+      to: CGPoint(x: -0.295, y: -0.096),
+      control1: CGPoint(x: -0.433, y: 0.250),
+      control2: CGPoint(x: -0.497, y: 0.052)
+    )
+    path.addCurve(
+      to: CGPoint(x: 0, y: -0.32),
+      control1: CGPoint(x: -0.364, y: -0.328),
+      control2: CGPoint(x: -0.199, y: -0.448)
+    )
+    path.closeSubpath()
+    return path
+  }()
+
+  private static let ringPath: Path = {
+    var path = Path()
+    path.move(to: CGPoint(x: 0.48, y: -0.03))
+    path.addCurve(
+      to: CGPoint(x: 0.02, y: 0.43),
+      control1: CGPoint(x: 0.47, y: 0.25),
+      control2: CGPoint(x: 0.29, y: 0.45)
+    )
+    path.addCurve(
+      to: CGPoint(x: -0.46, y: 0.02),
+      control1: CGPoint(x: -0.25, y: 0.44),
+      control2: CGPoint(x: -0.47, y: 0.27)
+    )
+    path.addCurve(
+      to: CGPoint(x: -0.02, y: -0.42),
+      control1: CGPoint(x: -0.46, y: -0.24),
+      control2: CGPoint(x: -0.27, y: -0.43)
+    )
+    path.addCurve(
+      to: CGPoint(x: 0.48, y: -0.03),
+      control1: CGPoint(x: 0.27, y: -0.42),
+      control2: CGPoint(x: 0.49, y: -0.28)
+    )
+    path.closeSubpath()
+    return path
+  }()
+
+  private static let curlPath: Path = {
+    var path = Path()
+    path.move(to: CGPoint(x: -0.45, y: 0.12))
+    path.addCurve(
+      to: CGPoint(x: -0.15, y: 0.08),
+      control1: CGPoint(x: -0.37, y: -0.18),
+      control2: CGPoint(x: -0.23, y: -0.18)
+    )
+    path.addCurve(
+      to: CGPoint(x: 0.15, y: 0.08),
+      control1: CGPoint(x: -0.07, y: -0.19),
+      control2: CGPoint(x: 0.07, y: -0.19)
+    )
+    path.addCurve(
+      to: CGPoint(x: 0.45, y: 0.12),
+      control1: CGPoint(x: 0.23, y: -0.17),
+      control2: CGPoint(x: 0.37, y: -0.16)
     )
     return path
-  }
+  }()
 
-  private func cloudDetailPath(
-    center: CGPoint,
-    artSide: Double
-  ) -> Path {
+  private static let fleckPath: Path = {
     var path = Path()
-    path.move(
-      to: CGPoint(
-        x: center.x - artSide * 0.22,
-        y: center.y - artSide * 0.03
-      )
+    path.move(to: CGPoint(x: -0.43, y: -0.08))
+    path.addCurve(
+      to: CGPoint(x: -0.06, y: -0.31),
+      control1: CGPoint(x: -0.33, y: -0.26),
+      control2: CGPoint(x: -0.19, y: -0.33)
     )
-    path.addQuadCurve(
-      to: CGPoint(
-        x: center.x - artSide * 0.075,
-        y: center.y - artSide * 0.055
-      ),
-      control: CGPoint(
-        x: center.x - artSide * 0.15,
-        y: center.y - artSide * 0.14
-      )
+    path.addCurve(
+      to: CGPoint(x: 0.44, y: -0.01),
+      control1: CGPoint(x: 0.18, y: -0.30),
+      control2: CGPoint(x: 0.39, y: -0.19)
     )
-    path.addQuadCurve(
-      to: CGPoint(
-        x: center.x + artSide * 0.075,
-        y: center.y - artSide * 0.055
-      ),
-      control: CGPoint(
-        x: center.x,
-        y: center.y - artSide * 0.15
-      )
+    path.addCurve(
+      to: CGPoint(x: 0.12, y: 0.29),
+      control1: CGPoint(x: 0.47, y: 0.16),
+      control2: CGPoint(x: 0.31, y: 0.29)
     )
-    path.addQuadCurve(
-      to: CGPoint(
-        x: center.x + artSide * 0.22,
-        y: center.y - artSide * 0.03
-      ),
-      control: CGPoint(
-        x: center.x + artSide * 0.15,
-        y: center.y - artSide * 0.14
-      )
+    path.addCurve(
+      to: CGPoint(x: -0.43, y: -0.08),
+      control1: CGPoint(x: -0.08, y: 0.30),
+      control2: CGPoint(x: -0.39, y: 0.17)
     )
+    path.closeSubpath()
     return path
-  }
+  }()
 }
 
 struct PoofPalette: Sendable {

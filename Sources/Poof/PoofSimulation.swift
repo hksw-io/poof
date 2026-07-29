@@ -14,14 +14,29 @@ enum PoofTone: Int, Hashable, Sendable {
   case dark
 }
 
+enum PoofContour: UInt8, CaseIterable, Hashable, Sendable {
+  case puff4
+  case puff5
+  case ring
+  case curl
+  case fleck
+}
+
+enum PoofPaint: UInt8, CaseIterable, Hashable, Sendable {
+  case fillAndOutline
+  case fillOutlineAndInset
+  case doubleStroke
+}
+
 struct PoofGlyph: Equatable, Sendable {
   let x: Double
   let y: Double
   let width: Double
   let height: Double
   let opacity: Double
-  let lobeCount: Int
-  let phase: Double
+  let contour: PoofContour
+  let paint: PoofPaint
+  let rotation: Double
   let tone: PoofTone
 
   init(
@@ -30,8 +45,9 @@ struct PoofGlyph: Equatable, Sendable {
     width: Double,
     height: Double,
     opacity: Double = 1,
-    lobeCount: Int = 5,
-    phase: Double = 0,
+    contour: PoofContour = .puff4,
+    paint: PoofPaint = .fillAndOutline,
+    rotation: Double = 0,
     tone: PoofTone = .light
   ) {
     self.x = x
@@ -39,8 +55,9 @@ struct PoofGlyph: Equatable, Sendable {
     self.width = width
     self.height = height
     self.opacity = opacity
-    self.lobeCount = lobeCount
-    self.phase = phase
+    self.contour = contour
+    self.paint = paint
+    self.rotation = rotation
     self.tone = tone
   }
 }
@@ -152,7 +169,7 @@ enum PoofSimulation {
     }
 
     return varied(
-      glyph,
+      styled(glyph, pose: pose, index: index),
       pose: pose,
       index: index,
       seed: variationSeed
@@ -168,8 +185,7 @@ enum PoofSimulation {
         width: 0.36,
         height: 0.25,
         opacity: 1,
-        lobeCount: 5,
-        phase: 0.18,
+        rotation: 0.18,
         tone: .light
       )
     case 1:
@@ -179,8 +195,7 @@ enum PoofSimulation {
         width: 0.38,
         height: 0.34,
         opacity: 1,
-        lobeCount: 5,
-        phase: 1.12,
+        rotation: 1.12,
         tone: .light
       )
     case 2:
@@ -190,8 +205,7 @@ enum PoofSimulation {
         width: 0.38,
         height: 0.34,
         opacity: 1,
-        lobeCount: 5,
-        phase: 2.06,
+        rotation: 2.06,
         tone: .light
       )
     case 3:
@@ -201,8 +215,7 @@ enum PoofSimulation {
         width: 0.36,
         height: 0.34,
         opacity: 1,
-        lobeCount: 5,
-        phase: 2.84,
+        rotation: 2.84,
         tone: .light
       )
     case 4:
@@ -212,8 +225,7 @@ enum PoofSimulation {
         width: 0.36,
         height: 0.34,
         opacity: 1,
-        lobeCount: 5,
-        phase: 3.62,
+        rotation: 3.62,
         tone: .light
       )
     case 5:
@@ -223,8 +235,7 @@ enum PoofSimulation {
         width: 0.50,
         height: 0.32,
         opacity: 1,
-        lobeCount: 6,
-        phase: 4.40,
+        rotation: 4.40,
         tone: .light
       )
     case 6:
@@ -234,8 +245,7 @@ enum PoofSimulation {
         width: 0.68,
         height: 0.51,
         opacity: 1,
-        lobeCount: 8,
-        phase: 5.18,
+        rotation: 5.18,
         tone: .light
       )
     default:
@@ -252,8 +262,7 @@ enum PoofSimulation {
         width: 0.40,
         height: 0.36,
         opacity: 1,
-        lobeCount: 6,
-        phase: 0.20,
+        rotation: 0.20,
         tone: .light
       )
     case 1:
@@ -263,8 +272,7 @@ enum PoofSimulation {
         width: 0.41,
         height: 0.40,
         opacity: 1,
-        lobeCount: 6,
-        phase: 1.04,
+        rotation: 1.04,
         tone: .light
       )
     case 2:
@@ -274,8 +282,7 @@ enum PoofSimulation {
         width: 0.42,
         height: 0.38,
         opacity: 1,
-        lobeCount: 6,
-        phase: 1.86,
+        rotation: 1.86,
         tone: .middle
       )
     case 3:
@@ -285,8 +292,7 @@ enum PoofSimulation {
         width: 0.41,
         height: 0.38,
         opacity: 1,
-        lobeCount: 6,
-        phase: 2.68,
+        rotation: 2.68,
         tone: .light
       )
     default:
@@ -356,8 +362,9 @@ enum PoofSimulation {
         width: reference.width,
         height: reference.height,
         opacity: reference.opacity,
-        lobeCount: reference.lobeCount,
-        phase: reference.phase,
+        contour: reference.contour,
+        paint: reference.paint,
+        rotation: reference.rotation,
         tone: reference.tone
       )
     }
@@ -388,8 +395,9 @@ enum PoofSimulation {
       width: reference.width * sizeScale,
       height: reference.height * sizeScale,
       opacity: reference.opacity,
-      lobeCount: reference.lobeCount,
-      phase: reference.phase
+      contour: reference.contour,
+      paint: reference.paint,
+      rotation: reference.rotation
         + noise(seed: seed, key: key &+ 4) * 0.16,
       tone: reference.tone
     )
@@ -401,30 +409,28 @@ enum PoofSimulation {
       y: -0.393,
       width: 0.075,
       height: 0.075,
-      phase: 0.2
+      rotation: 0.2
     ),
     PoofGlyph(
       x: 0.117,
       y: -0.371,
       width: 0.085,
       height: 0.075,
-      phase: 1.1
+      rotation: 1.1
     ),
     PoofGlyph(
       x: -0.013,
       y: -0.294,
       width: 0.125,
       height: 0.105,
-      lobeCount: 6,
-      phase: 2.0
+      rotation: 2.0
     ),
     PoofGlyph(
       x: 0.215,
       y: -0.239,
       width: 0.135,
       height: 0.155,
-      lobeCount: 6,
-      phase: 2.8,
+      rotation: 2.8,
       tone: .middle
     ),
     PoofGlyph(
@@ -432,21 +438,21 @@ enum PoofSimulation {
       y: -0.153,
       width: 0.055,
       height: 0.065,
-      phase: 3.7
+      rotation: 3.7
     ),
     PoofGlyph(
       x: -0.340,
       y: -0.062,
       width: 0.095,
       height: 0.085,
-      phase: 4.6
+      rotation: 4.6
     ),
     PoofGlyph(
       x: 0.330,
       y: 0.060,
       width: 0.085,
       height: 0.120,
-      phase: 5.4,
+      rotation: 5.4,
       tone: .middle
     ),
     PoofGlyph(
@@ -454,53 +460,49 @@ enum PoofSimulation {
       y: 0.200,
       width: 0.075,
       height: 0.100,
-      phase: 0.7
+      rotation: 0.7
     ),
     PoofGlyph(
       x: -0.249,
       y: 0.228,
       width: 0.115,
       height: 0.095,
-      lobeCount: 6,
-      phase: 1.6
+      rotation: 1.6
     ),
     PoofGlyph(
       x: 0.142,
       y: 0.314,
       width: 0.095,
       height: 0.085,
-      phase: 2.5
+      rotation: 2.5
     ),
     PoofGlyph(
       x: -0.155,
       y: 0.346,
       width: 0.085,
       height: 0.075,
-      phase: 3.4
+      rotation: 3.4
     ),
     PoofGlyph(
       x: -0.190,
       y: -0.160,
       width: 0.150,
       height: 0.140,
-      lobeCount: 6,
-      phase: 4.3
+      rotation: 4.3
     ),
     PoofGlyph(
       x: -0.070,
       y: -0.190,
       width: 0.160,
       height: 0.135,
-      lobeCount: 6,
-      phase: 5.2
+      rotation: 5.2
     ),
     PoofGlyph(
       x: 0.070,
       y: -0.180,
       width: 0.145,
       height: 0.150,
-      lobeCount: 6,
-      phase: 0.4,
+      rotation: 0.4,
       tone: .middle
     ),
     PoofGlyph(
@@ -508,22 +510,21 @@ enum PoofSimulation {
       y: -0.140,
       width: 0.145,
       height: 0.135,
-      phase: 1.3
+      rotation: 1.3
     ),
     PoofGlyph(
       x: -0.220,
       y: -0.040,
       width: 0.145,
       height: 0.150,
-      phase: 2.2
+      rotation: 2.2
     ),
     PoofGlyph(
       x: -0.100,
       y: -0.070,
       width: 0.170,
       height: 0.160,
-      lobeCount: 6,
-      phase: 3.1,
+      rotation: 3.1,
       tone: .middle
     ),
     PoofGlyph(
@@ -531,38 +532,35 @@ enum PoofSimulation {
       y: -0.070,
       width: 0.165,
       height: 0.145,
-      lobeCount: 6,
-      phase: 4.0
+      rotation: 4.0
     ),
     PoofGlyph(
       x: 0.160,
       y: -0.020,
       width: 0.150,
       height: 0.145,
-      phase: 4.9
+      rotation: 4.9
     ),
     PoofGlyph(
       x: -0.190,
       y: 0.090,
       width: 0.145,
       height: 0.135,
-      phase: 5.8
+      rotation: 5.8
     ),
     PoofGlyph(
       x: -0.060,
       y: 0.050,
       width: 0.175,
       height: 0.165,
-      lobeCount: 6,
-      phase: 0.9
+      rotation: 0.9
     ),
     PoofGlyph(
       x: 0.070,
       y: 0.070,
       width: 0.160,
       height: 0.155,
-      lobeCount: 6,
-      phase: 1.8,
+      rotation: 1.8,
       tone: .middle
     ),
     PoofGlyph(
@@ -570,37 +568,35 @@ enum PoofSimulation {
       y: 0.100,
       width: 0.145,
       height: 0.135,
-      phase: 2.7
+      rotation: 2.7
     ),
     PoofGlyph(
       x: -0.150,
       y: 0.190,
       width: 0.145,
       height: 0.140,
-      phase: 3.6
+      rotation: 3.6
     ),
     PoofGlyph(
       x: -0.020,
       y: 0.170,
       width: 0.165,
       height: 0.155,
-      lobeCount: 6,
-      phase: 4.5
+      rotation: 4.5
     ),
     PoofGlyph(
       x: 0.110,
       y: 0.200,
       width: 0.145,
       height: 0.140,
-      phase: 5.4
+      rotation: 5.4
     ),
     PoofGlyph(
       x: 0.020,
       y: -0.010,
       width: 0.180,
       height: 0.170,
-      lobeCount: 6,
-      phase: 0.6,
+      rotation: 0.6,
       tone: .dark
     ),
     PoofGlyph(
@@ -608,7 +604,7 @@ enum PoofSimulation {
       y: 0.275,
       width: 0.125,
       height: 0.105,
-      phase: 1.5
+      rotation: 1.5
     ),
   ]
 
@@ -618,21 +614,21 @@ enum PoofSimulation {
       y: -0.359,
       width: 0.045,
       height: 0.055,
-      phase: 0.1
+      rotation: 0.1
     ),
     PoofGlyph(
       x: 0.114,
       y: -0.320,
       width: 0.055,
       height: 0.045,
-      phase: 1.0
+      rotation: 1.0
     ),
     PoofGlyph(
       x: -0.056,
       y: -0.280,
       width: 0.110,
       height: 0.075,
-      phase: 1.9,
+      rotation: 1.9,
       tone: .middle
     ),
     PoofGlyph(
@@ -640,30 +636,28 @@ enum PoofSimulation {
       y: -0.243,
       width: 0.065,
       height: 0.075,
-      phase: 2.8
+      rotation: 2.8
     ),
     PoofGlyph(
       x: 0.253,
       y: -0.159,
       width: 0.060,
       height: 0.060,
-      phase: 3.7
+      rotation: 3.7
     ),
     PoofGlyph(
       x: -0.245,
       y: -0.148,
       width: 0.140,
       height: 0.155,
-      lobeCount: 6,
-      phase: 4.6
+      rotation: 4.6
     ),
     PoofGlyph(
       x: 0.159,
       y: -0.074,
       width: 0.115,
       height: 0.115,
-      lobeCount: 6,
-      phase: 5.5,
+      rotation: 5.5,
       tone: .middle
     ),
     PoofGlyph(
@@ -671,45 +665,42 @@ enum PoofSimulation {
       y: -0.066,
       width: 0.140,
       height: 0.140,
-      lobeCount: 6,
-      phase: 0.7
+      rotation: 0.7
     ),
     PoofGlyph(
       x: -0.298,
       y: -0.014,
       width: 0.040,
       height: 0.040,
-      phase: 1.6
+      rotation: 1.6
     ),
     PoofGlyph(
       x: 0.073,
       y: 0.055,
       width: 0.140,
       height: 0.115,
-      lobeCount: 6,
-      phase: 2.5
+      rotation: 2.5
     ),
     PoofGlyph(
       x: 0.301,
       y: 0.057,
       width: 0.040,
       height: 0.040,
-      phase: 3.4
+      rotation: 3.4
     ),
     PoofGlyph(
       x: 0.230,
       y: 0.092,
       width: 0.050,
       height: 0.050,
-      phase: 4.3
+      rotation: 4.3
     ),
     PoofGlyph(
       x: -0.177,
       y: 0.102,
       width: 0.180,
       height: 0.115,
-      lobeCount: 6,
-      phase: 5.2,
+      rotation: 5.2,
       tone: .middle
     ),
     PoofGlyph(
@@ -717,36 +708,35 @@ enum PoofSimulation {
       y: 0.233,
       width: 0.140,
       height: 0.160,
-      lobeCount: 6,
-      phase: 0.4
+      rotation: 0.4
     ),
     PoofGlyph(
       x: -0.151,
       y: 0.246,
       width: 0.075,
       height: 0.055,
-      phase: 1.3
+      rotation: 1.3
     ),
     PoofGlyph(
       x: 0.054,
       y: 0.246,
       width: 0.095,
       height: 0.095,
-      phase: 2.2
+      rotation: 2.2
     ),
     PoofGlyph(
       x: -0.092,
       y: 0.338,
       width: 0.040,
       height: 0.030,
-      phase: 3.1
+      rotation: 3.1
     ),
     PoofGlyph(
       x: 0.115,
       y: 0.356,
       width: 0.040,
       height: 0.040,
-      phase: 4.0
+      rotation: 4.0
     ),
   ]
 
@@ -757,7 +747,7 @@ enum PoofSimulation {
       width: 0.045,
       height: 0.035,
       opacity: 0.96,
-      phase: 0.3
+      rotation: 0.3
     ),
     PoofGlyph(
       x: 0.206,
@@ -765,7 +755,7 @@ enum PoofSimulation {
       width: 0.035,
       height: 0.045,
       opacity: 0.96,
-      phase: 1.2
+      rotation: 1.2
     ),
     PoofGlyph(
       x: -0.261,
@@ -773,7 +763,7 @@ enum PoofSimulation {
       width: 0.045,
       height: 0.045,
       opacity: 0.96,
-      phase: 2.1
+      rotation: 2.1
     ),
     PoofGlyph(
       x: 0.123,
@@ -781,8 +771,7 @@ enum PoofSimulation {
       width: 0.120,
       height: 0.075,
       opacity: 0.96,
-      lobeCount: 6,
-      phase: 3.0
+      rotation: 3.0
     ),
     PoofGlyph(
       x: -0.171,
@@ -790,7 +779,7 @@ enum PoofSimulation {
       width: 0.095,
       height: 0.095,
       opacity: 0.96,
-      phase: 3.9
+      rotation: 3.9
     ),
     PoofGlyph(
       x: -0.034,
@@ -798,7 +787,7 @@ enum PoofSimulation {
       width: 0.095,
       height: 0.055,
       opacity: 0.96,
-      phase: 4.8
+      rotation: 4.8
     ),
     PoofGlyph(
       x: -0.006,
@@ -806,7 +795,7 @@ enum PoofSimulation {
       width: 0.075,
       height: 0.065,
       opacity: 0.96,
-      phase: 5.7,
+      rotation: 5.7,
       tone: .middle
     ),
     PoofGlyph(
@@ -815,7 +804,7 @@ enum PoofSimulation {
       width: 0.045,
       height: 0.045,
       opacity: 0.96,
-      phase: 0.9
+      rotation: 0.9
     ),
     PoofGlyph(
       x: 0.047,
@@ -823,7 +812,7 @@ enum PoofSimulation {
       width: 0.045,
       height: 0.045,
       opacity: 0.96,
-      phase: 1.8
+      rotation: 1.8
     ),
     PoofGlyph(
       x: -0.153,
@@ -831,7 +820,7 @@ enum PoofSimulation {
       width: 0.095,
       height: 0.085,
       opacity: 0.96,
-      phase: 2.7
+      rotation: 2.7
     ),
     PoofGlyph(
       x: 0.267,
@@ -839,7 +828,7 @@ enum PoofSimulation {
       width: 0.035,
       height: 0.045,
       opacity: 0.96,
-      phase: 3.6
+      rotation: 3.6
     ),
     PoofGlyph(
       x: -0.192,
@@ -847,7 +836,7 @@ enum PoofSimulation {
       width: 0.045,
       height: 0.035,
       opacity: 0.96,
-      phase: 4.5
+      rotation: 4.5
     ),
     PoofGlyph(
       x: 0.009,
@@ -855,9 +844,90 @@ enum PoofSimulation {
       width: 0.055,
       height: 0.065,
       opacity: 0.96,
-      phase: 5.4
+      rotation: 5.4
     ),
   ]
+
+  private static func styled(
+    _ glyph: PoofGlyph,
+    pose: PoofPose,
+    index: Int
+  ) -> PoofGlyph {
+    let contour: PoofContour
+    let paint: PoofPaint
+
+    switch pose {
+    case .cloud:
+      contour = index.isMultiple(of: 2) ? .puff4 : .puff5
+      paint = .fillAndOutline
+    case .clusters:
+      contour =
+        [PoofContour.puff4, .puff5, .puff5, .puff4][
+          index % 4
+        ]
+      paint = .fillAndOutline
+    case .puffs:
+      switch index % 8 {
+      case 0, 1:
+        contour = .puff4
+        paint = .fillAndOutline
+      case 2, 3, 4:
+        contour = .puff5
+        paint = .fillAndOutline
+      case 5:
+        contour = .ring
+        paint = .fillOutlineAndInset
+      case 6:
+        contour = .curl
+        paint = .doubleStroke
+      default:
+        contour = .fleck
+        paint = .fillAndOutline
+      }
+    case .wisps:
+      switch index % 8 {
+      case 0, 1, 2:
+        contour = index.isMultiple(of: 2) ? .puff4 : .puff5
+        paint = .fillAndOutline
+      case 3, 4:
+        contour = .ring
+        paint = .fillOutlineAndInset
+      case 5:
+        contour = .curl
+        paint = .doubleStroke
+      default:
+        contour = .fleck
+        paint = .fillAndOutline
+      }
+    case .ringlets:
+      switch index % 8 {
+      case 3:
+        contour = .puff4
+        paint = .fillAndOutline
+      case 4:
+        contour = .ring
+        paint = .doubleStroke
+      case 5:
+        contour = .curl
+        paint = .doubleStroke
+      default:
+        contour = .fleck
+        paint = .fillAndOutline
+      }
+    }
+
+    return PoofGlyph(
+      x: glyph.x,
+      y: glyph.y,
+      width: glyph.width,
+      height: glyph.height,
+      opacity: glyph.opacity,
+      contour: contour,
+      paint: paint,
+      rotation: glyph.rotation,
+      tone: glyph.tone
+    )
+  }
 
   private static func varied(
     _ glyph: PoofGlyph,
@@ -883,7 +953,7 @@ enum PoofSimulation {
     let positionJitterX = noise(seed: seed, key: key &+ 1) * 0.006
     let positionJitterY = noise(seed: seed, key: key &+ 2) * 0.006
     let sizeVariation = 1 + noise(seed: seed, key: key &+ 3) * 0.03
-    let phaseVariation = noise(seed: seed, key: key &+ 4) * 0.10
+    let rotationVariation = noise(seed: seed, key: key &+ 4) * 0.10
 
     return PoofGlyph(
       x: rotatedX + translationX + positionJitterX,
@@ -891,8 +961,9 @@ enum PoofSimulation {
       width: glyph.width * sizeVariation,
       height: glyph.height * sizeVariation,
       opacity: glyph.opacity,
-      lobeCount: glyph.lobeCount,
-      phase: glyph.phase + phaseVariation,
+      contour: glyph.contour,
+      paint: glyph.paint,
+      rotation: glyph.rotation + rotationVariation,
       tone: glyph.tone
     )
   }

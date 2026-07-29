@@ -152,13 +152,14 @@ struct PoofSimulationTests {
             #expect(glyph.width.isFinite)
             #expect(glyph.height.isFinite)
             #expect(glyph.opacity.isFinite)
-            #expect(glyph.phase.isFinite)
+            #expect(glyph.rotation.isFinite)
             #expect(abs(glyph.x) <= 0.60)
             #expect(abs(glyph.y) <= 0.60)
             #expect((0...1).contains(glyph.width))
             #expect((0...1).contains(glyph.height))
             #expect((0...1).contains(glyph.opacity))
-            #expect((4...10).contains(glyph.lobeCount))
+            #expect(PoofContour.allCases.contains(glyph.contour))
+            #expect(PoofPaint.allCases.contains(glyph.paint))
           }
         }
       }
@@ -229,14 +230,27 @@ struct PoofSimulationTests {
           abs(firstGlyph.height - secondGlyph.height)
             <= firstGlyph.height * 0.07
         )
-        #expect(abs(firstGlyph.phase - secondGlyph.phase) <= 0.21)
+        #expect(abs(firstGlyph.rotation - secondGlyph.rotation) <= 0.21)
         #expect(firstGlyph.opacity == secondGlyph.opacity)
-        #expect(firstGlyph.lobeCount == secondGlyph.lobeCount)
+        #expect(firstGlyph.contour == secondGlyph.contour)
+        #expect(firstGlyph.paint == secondGlyph.paint)
         #expect(firstGlyph.tone == secondGlyph.tone)
       }
     }
 
     #expect(changedGlyphCount > 0)
+  }
+
+  @Test("The sequence uses every organic contour")
+  func contourCoverage() {
+    let seed: UInt64 = 0x504F_4F46
+    let configuration = PoofConfiguration(seed: seed)
+    let glyphs = PoofPose.allCases.flatMap { pose in
+      glyphs(for: pose, in: configuration, seed: seed)
+    }
+
+    #expect(Set(glyphs.map(\.contour)) == Set(PoofContour.allCases))
+    #expect(Set(glyphs.map(\.paint)) == Set(PoofPaint.allCases))
   }
 
   @Test("Out-of-range fixed glyph indices are absent")
