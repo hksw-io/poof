@@ -170,7 +170,11 @@ enum PoofSimulation {
 
     return varied(
       styled(
-        matchedOpeningScale(glyph, pose: pose),
+        matchedReferenceGeometry(
+          glyph,
+          pose: pose,
+          index: index
+        ),
         pose: pose,
         index: index
       ),
@@ -933,29 +937,61 @@ enum PoofSimulation {
     )
   }
 
-  private static func matchedOpeningScale(
+  private static func matchedReferenceGeometry(
     _ glyph: PoofGlyph,
-    pose: PoofPose
+    pose: PoofPose,
+    index: Int
   ) -> PoofGlyph {
-    let scaleX: Double
-    let scaleY: Double
+    let positionScaleX: Double
+    let positionScaleY: Double
+    let sizeScaleX: Double
+    let sizeScaleY: Double
+    let offsetX: Double
+    let offsetY: Double
 
     switch pose {
     case .cloud:
-      scaleX = 1.18
-      scaleY = 1.05
+      positionScaleX = 1.15
+      positionScaleY = 1.02
+      sizeScaleX = 1.24
+      sizeScaleY = 1.10
+      offsetX = -0.010
+      offsetY = -0.040
     case .clusters:
-      scaleX = 1.15
-      scaleY = 1.15
-    case .puffs, .wisps, .ringlets:
-      return glyph
+      positionScaleX = 1.02
+      positionScaleY = 1.02
+      sizeScaleX = 1.28
+      sizeScaleY = 1.28
+      offsetX = -0.005
+      offsetY = 0.018
+    case .puffs:
+      positionScaleX = 1.18
+      positionScaleY = 1.07
+      sizeScaleX = index < 11 ? 0.72 : 1.48
+      sizeScaleY = index < 11 ? 0.72 : 1.48
+      offsetX = 0
+      offsetY = -0.005
+    case .wisps:
+      positionScaleX = 1.02
+      positionScaleY = 1.02
+      sizeScaleX = 1.48
+      sizeScaleY = 1.48
+      offsetX = -0.018
+      offsetY = 0.008
+    case .ringlets:
+      positionScaleX = 1
+      positionScaleY = 1
+      sizeScaleX = 1.38
+      sizeScaleY = 1.38
+      offsetX = -0.010
+      offsetY = -0.011
     }
 
     return PoofGlyph(
-      x: glyph.x * scaleX,
-      y: glyph.y * scaleY,
-      width: glyph.width * scaleX,
-      height: glyph.height * scaleY,
+      x: glyph.x * positionScaleX + offsetX,
+      y: glyph.y * positionScaleY + offsetY,
+      width: glyph.width * sizeScaleX,
+      height: glyph.height * sizeScaleY,
       opacity: glyph.opacity,
       contour: glyph.contour,
       paint: glyph.paint,

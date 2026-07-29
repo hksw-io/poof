@@ -269,6 +269,81 @@ struct PoofRenderingTests {
     #expect((72...76).contains(clusters.height))
   }
 
+  @Test("Legacy measurements hold at every reference size")
+  func legacyMeasurementEnvelope() throws {
+    let progresses = [0.1, 0.3, 0.5, 0.7, 0.9]
+    let references = LegacyReference.all
+
+    for reference in references {
+      var measurements: [LegacyMeasurement] = []
+
+      for (index, progress) in progresses.enumerated() {
+        let image = try #require(
+          snapshot(
+            progress: progress,
+            width: Double(reference.size),
+            height: Double(reference.size)
+          )
+        )
+        let measurement = try #require(image.legacyMeasurement())
+        let expectedBounds = reference.bounds[index]
+        let expectedMass = reference.normalizedAlphaMass[index]
+        let expectedCentroid = reference.normalizedCentroids[index]
+        let centroidTolerance = index == 4 ? 0.030 : 0.025
+        let relativeMassTolerance = index == 4 ? 0.15 : 0.10
+        let absoluteMassFloor = index == 4 ? 0.008 : 0.012
+        let massTolerance = max(
+          expectedMass * relativeMassTolerance,
+          absoluteMassFloor
+        )
+
+        #expect(
+          abs(measurement.bounds.width - expectedBounds.width)
+            <= reference.dimensionTolerance
+        )
+        #expect(
+          abs(measurement.bounds.height - expectedBounds.height)
+            <= reference.dimensionTolerance
+        )
+        #expect(
+          abs(measurement.normalizedAlphaMass - expectedMass)
+            <= massTolerance
+        )
+        #expect(
+          abs(
+            measurement.normalizedCentroid.x
+              - expectedCentroid.x
+          ) <= centroidTolerance
+        )
+        #expect(
+          abs(
+            measurement.normalizedCentroid.y
+              - expectedCentroid.y
+          ) <= centroidTolerance
+        )
+        #expect(
+          reference.connectedComponentRanges[index].contains(
+            measurement.connectedComponentCount
+          )
+        )
+
+        measurements.append(measurement)
+      }
+
+      let openingMass = measurements[0].normalizedAlphaMass
+      let measuredRatios = measurements.map {
+        $0.normalizedAlphaMass / openingMass
+      }
+
+      for (index, ratio) in measuredRatios.enumerated() {
+        #expect(
+          abs(ratio - LegacyReference.alphaMassRatios[index])
+            <= LegacyReference.alphaMassRatioTolerances[index]
+        )
+      }
+    }
+  }
+
   private func snapshot(
     progress: Double,
     colorScheme: ColorScheme = .light,
@@ -367,6 +442,268 @@ private struct PixelSnapshot {
     return Double(totalDifference)
       / Double(pixels.count * Int(UInt8.max))
   }
+
+  func legacyMeasurement() -> LegacyMeasurement? {
+    let alphaBoundsThreshold: UInt8 = 13
+    let alphaMassThreshold: UInt8 = 3
+    var minimumX = width
+    var minimumY = height
+    var maximumX = -1
+    var maximumY = -1
+    var alphaMass = 0.0
+    var weightedX = 0.0
+    var weightedY = 0.0
+
+    for offset in stride(from: 0, to: pixels.count, by: 4) {
+      let alpha = pixels[offset + 3]
+      let pixelIndex = offset / 4
+      let x = pixelIndex % width
+      let y = pixelIndex / width
+
+      if alpha >= alphaBoundsThreshold {
+        minimumX = min(minimumX, x)
+        minimumY = min(minimumY, y)
+        maximumX = max(maximumX, x)
+        maximumY = max(maximumY, y)
+      }
+
+      guard alpha >= alphaMassThreshold else {
+        continue
+      }
+
+      let weight = Double(alpha) / Double(UInt8.max)
+      alphaMass += weight
+      weightedX += Double(x) * weight
+      weightedY += Double(y) * weight
+    }
+
+    guard
+      alphaMass > 0,
+      maximumX >= minimumX,
+      maximumY >= minimumY
+    else {
+      return nil
+    }
+
+    return LegacyMeasurement(
+      bounds: PixelBounds(
+        minimumX: minimumX,
+        minimumY: minimumY,
+        maximumX: maximumX,
+        maximumY: maximumY
+      ),
+      normalizedAlphaMass: alphaMass / Double(width * height),
+      normalizedCentroid: CGPoint(
+        x: (weightedX / alphaMass - Double(width) / 2)
+          / Double(width),
+        y: (weightedY / alphaMass - Double(height) / 2)
+          / Double(height)
+      ),
+      connectedComponentCount: connectedComponentCount(
+        luminanceThreshold: 16,
+        minimumArea: 4
+      )
+    )
+  }
+
+  private func connectedComponentCount(
+    luminanceThreshold: Int,
+    minimumArea: Int
+  ) -> Int {
+    var included = [Bool](repeating: false, count: width * height)
+
+    for pixelIndex in included.indices {
+      let offset = pixelIndex * 4
+      let luminance =
+        (2_126 * Int(pixels[offset])
+          + 7_152 * Int(pixels[offset + 1])
+          + 722 * Int(pixels[offset + 2])) / 10_000
+      included[pixelIndex] = luminance >= luminanceThreshold
+    }
+
+    var visited = [Bool](repeating: false, count: included.count)
+    var componentCount = 0
+
+    for start in included.indices
+    where included[start] && visited[start] == false {
+      var stack = [start]
+      var area = 0
+      visited[start] = true
+
+      while let pixelIndex = stack.popLast() {
+        area += 1
+        let x = pixelIndex % width
+        let y = pixelIndex / width
+
+        for deltaY in -1...1 {
+          for deltaX in -1...1
+          where deltaX != 0 || deltaY != 0 {
+            let neighborX = x + deltaX
+            let neighborY = y + deltaY
+
+            guard
+              (0..<width).contains(neighborX),
+              (0..<height).contains(neighborY)
+            else {
+              continue
+            }
+
+            let neighbor = neighborY * width + neighborX
+            guard included[neighbor], visited[neighbor] == false else {
+              continue
+            }
+
+            visited[neighbor] = true
+            stack.append(neighbor)
+          }
+        }
+      }
+
+      if area >= minimumArea {
+        componentCount += 1
+      }
+    }
+
+    return componentCount
+  }
+}
+
+private struct LegacyMeasurement {
+  let bounds: PixelBounds
+  let normalizedAlphaMass: Double
+  let normalizedCentroid: CGPoint
+  let connectedComponentCount: Int
+}
+
+private struct LegacyReference {
+  static let alphaMassRatios = [
+    1.0000,
+    0.9175,
+    0.6350,
+    0.2804,
+    0.0886,
+  ]
+
+  static let alphaMassRatioTolerances = [
+    0.0001,
+    0.025,
+    0.025,
+    0.020,
+    0.012,
+  ]
+
+  // Numeric envelopes preserve the measured public behavior without storing
+  // or deriving artwork from the legacy implementation.
+  static let all = [
+    LegacyReference(
+      size: 42,
+      bounds: [
+        PixelSize(width: 40, height: 36),
+        PixelSize(width: 38, height: 37),
+        PixelSize(width: 37, height: 36),
+        PixelSize(width: 28, height: 33),
+        PixelSize(width: 24, height: 27),
+      ],
+      normalizedAlphaMass: [
+        0.5508,
+        0.5048,
+        0.3485,
+        0.1541,
+        0.0489,
+      ],
+      normalizedCentroids: [
+        CGPoint(x: -0.0149, y: -0.0333),
+        CGPoint(x: -0.0155, y: -0.0106),
+        CGPoint(x: -0.0113, y: -0.0195),
+        CGPoint(x: -0.0260, y: -0.0003),
+        CGPoint(x: -0.0579, y: -0.0130),
+      ],
+      connectedComponentRanges: [
+        1...2,
+        1...2,
+        1...8,
+        8...12,
+        10...13,
+      ],
+      dimensionTolerance: 2
+    ),
+    LegacyReference(
+      size: 84,
+      bounds: [
+        PixelSize(width: 81, height: 73),
+        PixelSize(width: 78, height: 74),
+        PixelSize(width: 75, height: 73),
+        PixelSize(width: 57, height: 68),
+        PixelSize(width: 50, height: 56),
+      ],
+      normalizedAlphaMass: [
+        0.5645,
+        0.5180,
+        0.3589,
+        0.1583,
+        0.0499,
+      ],
+      normalizedCentroids: [
+        CGPoint(x: -0.0090, y: -0.0274),
+        CGPoint(x: -0.0096, y: -0.0045),
+        CGPoint(x: -0.0053, y: -0.0134),
+        CGPoint(x: -0.0200, y: 0.0058),
+        CGPoint(x: -0.0528, y: -0.0062),
+      ],
+      connectedComponentRanges: [
+        1...2,
+        1...2,
+        6...10,
+        10...19,
+        10...14,
+      ],
+      dimensionTolerance: 3
+    ),
+    LegacyReference(
+      size: 97,
+      bounds: [
+        PixelSize(width: 95, height: 85),
+        PixelSize(width: 91, height: 86),
+        PixelSize(width: 88, height: 86),
+        PixelSize(width: 67, height: 80),
+        PixelSize(width: 58, height: 65),
+      ],
+      normalizedAlphaMass: [
+        0.5783,
+        0.5310,
+        0.3680,
+        0.1625,
+        0.0514,
+      ],
+      normalizedCentroids: [
+        CGPoint(x: -0.0082, y: -0.0268),
+        CGPoint(x: -0.0088, y: -0.0037),
+        CGPoint(x: -0.0046, y: -0.0127),
+        CGPoint(x: -0.0196, y: 0.0073),
+        CGPoint(x: -0.0524, y: -0.0054),
+      ],
+      connectedComponentRanges: [
+        1...2,
+        1...2,
+        8...13,
+        13...20,
+        11...15,
+      ],
+      dimensionTolerance: 3
+    ),
+  ]
+
+  let size: Int
+  let bounds: [PixelSize]
+  let normalizedAlphaMass: [Double]
+  let normalizedCentroids: [CGPoint]
+  let connectedComponentRanges: [ClosedRange<Int>]
+  let dimensionTolerance: Int
+}
+
+private struct PixelSize {
+  let width: Int
+  let height: Int
 }
 
 private struct PixelStatistics {

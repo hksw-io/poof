@@ -295,12 +295,18 @@ struct PoofSimulationTests {
   func contourCoverage() {
     let seed: UInt64 = 0x504F_4F46
     let configuration = PoofConfiguration(seed: seed)
-    let glyphs = PoofPose.allCases.flatMap { pose in
+    let allGlyphs: [PoofGlyph] = PoofPose.allCases.flatMap { pose in
       glyphs(for: pose, in: configuration, seed: seed)
     }
 
-    #expect(Set(glyphs.map(\.contour)) == Set(PoofContour.allCases))
-    #expect(Set(glyphs.map(\.paint)) == Set(PoofPaint.allCases))
+    #expect(
+      Set(allGlyphs.map { $0.contour })
+        == Set(PoofContour.allCases)
+    )
+    #expect(
+      Set(allGlyphs.map { $0.paint })
+        == Set(PoofPaint.allCases)
+    )
   }
 
   @Test("Out-of-range fixed glyph indices are absent")
