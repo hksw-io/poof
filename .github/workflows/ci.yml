@@ -36,3 +36,28 @@ jobs:
 
       - name: Run release tests
         run: swift test -c release --parallel
+
+  platforms:
+    name: Build ${{ matrix.platform }}
+    runs-on: macos-26
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - iOS
+          - tvOS
+          - watchOS
+          - visionOS
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Build library
+        run: >-
+          xcodebuild -quiet
+          -scheme Poof
+          -destination "generic/platform=${{ matrix.platform }}"
+          build
+          CODE_SIGNING_ALLOWED=NO
+          COMPILER_INDEX_STORE_ENABLE=NO
