@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Check formatting
+        run: swift format lint --strict --parallel --recursive Package.swift Sources Tests
+
+      - name: Run debug tests
+        run: swift test --parallel
+
+      - name: Build release products
+        run: swift build -c release
+
+      - name: Run release tests
+        run: swift test -c release --parallel
