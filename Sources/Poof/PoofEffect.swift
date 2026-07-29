@@ -115,10 +115,31 @@ struct PoofCanvas: View {
       let center = CGPoint(x: size.width / 2, y: size.height / 2)
       let outlineWidth = max(0.5, artSide * 0.014)
       let detailWidth = max(0.4, artSide * 0.011)
+      let detailStrokeStyle = StrokeStyle(
+        lineWidth: detailWidth,
+        lineCap: .round,
+        lineJoin: .round
+      )
+      let shadowStrokeStyle = StrokeStyle(
+        lineWidth: outlineWidth * 2.15,
+        lineCap: .round,
+        lineJoin: .round
+      )
+      let outerStrokeStyle = StrokeStyle(
+        lineWidth: outlineWidth * 1.65,
+        lineCap: .round,
+        lineJoin: .round
+      )
+      let innerStrokeStyle = StrokeStyle(
+        lineWidth: outlineWidth * 0.72,
+        lineCap: .round,
+        lineJoin: .round
+      )
       let glyphs = frameSet.glyphs(for: pose)
       var shadowContext = context
 
       if !reducesTransparency {
+        shadowContext.translateBy(x: 0, y: artSide * 0.018)
         shadowContext.addFilter(
           .blur(radius: max(0.35, artSide * 0.017))
         )
@@ -138,26 +159,16 @@ struct PoofCanvas: View {
         if !reducesTransparency {
           var glyphShadowContext = shadowContext
           glyphShadowContext.opacity = opacity
-          let shadowPath = path.applying(
-            CGAffineTransform(
-              translationX: 0,
-              y: artSide * 0.018
-            )
-          )
 
           if glyph.paint == .doubleStroke {
             glyphShadowContext.stroke(
-              shadowPath,
+              path,
               with: .color(palette.shadow),
-              style: StrokeStyle(
-                lineWidth: outlineWidth * 2.15,
-                lineCap: .round,
-                lineJoin: .round
-              )
+              style: shadowStrokeStyle
             )
           } else {
             glyphShadowContext.fill(
-              shadowPath,
+              path,
               with: .color(palette.shadow)
             )
           }
@@ -186,31 +197,19 @@ struct PoofCanvas: View {
                 scale: 0.46
               ),
               with: .color(palette.detail),
-              style: StrokeStyle(
-                lineWidth: detailWidth,
-                lineCap: .round,
-                lineJoin: .round
-              )
+              style: detailStrokeStyle
             )
           }
         case .doubleStroke:
           glyphContext.stroke(
             path,
             with: .color(palette.outline),
-            style: StrokeStyle(
-              lineWidth: outlineWidth * 1.65,
-              lineCap: .round,
-              lineJoin: .round
-            )
+            style: outerStrokeStyle
           )
           glyphContext.stroke(
             path,
             with: .color(palette.fill(for: glyph.tone)),
-            style: StrokeStyle(
-              lineWidth: outlineWidth * 0.72,
-              lineCap: .round,
-              lineJoin: .round
-            )
+            style: innerStrokeStyle
           )
         }
 
@@ -222,11 +221,7 @@ struct PoofCanvas: View {
               artSide: artSide
             ),
             with: .color(palette.detail),
-            style: StrokeStyle(
-              lineWidth: detailWidth,
-              lineCap: .round,
-              lineJoin: .round
-            )
+            style: detailStrokeStyle
           )
         } else if pose == .cloud, index == glyphs.count - 1 {
           glyphContext.stroke(
@@ -241,11 +236,7 @@ struct PoofCanvas: View {
               rotation: 0
             ),
             with: .color(palette.detail),
-            style: StrokeStyle(
-              lineWidth: detailWidth,
-              lineCap: .round,
-              lineJoin: .round
-            )
+            style: detailStrokeStyle
           )
         }
       }
@@ -290,11 +281,11 @@ struct PoofCanvas: View {
       center: glyphCenter,
       width: artSide * glyph.width * 0.49,
       height: artSide * glyph.height * 0.65,
-      rotation: indexRotation(for: glyph)
+      rotation: curlDetailRotation(for: glyph)
     )
   }
 
-  private func indexRotation(for glyph: PoofGlyph) -> Double {
+  private func curlDetailRotation(for glyph: PoofGlyph) -> Double {
     glyph.x < 0 ? 0.08 : -0.08
   }
 
@@ -323,6 +314,7 @@ struct PoofCanvas: View {
       )
   }
 
+  // Canvas transforms these cached unit-space contours for every glyph.
   private static func unitPath(for contour: PoofContour) -> Path {
     switch contour {
     case .puff4:
