@@ -7,6 +7,21 @@ import Testing
 @MainActor
 @Suite("SwiftUI rendering")
 struct PoofRenderingTests {
+  @Test("Public effect renders a pose")
+  func publicEffectRenders() throws {
+    let content = PoofEffect(
+      progress: 0.50,
+      configuration: PoofConfiguration(seed: 0x504F_4F46)
+    )
+    .frame(width: 84, height: 84)
+    let renderer = ImageRenderer(content: content)
+    renderer.proposedSize = ProposedViewSize(width: 84, height: 84)
+    renderer.scale = 1
+
+    let image = try #require(renderer.cgImage)
+    #expect(PixelSnapshot(image: image).statistics.alphaTotal > 0)
+  }
+
   @Test("The endpoint frames are transparent")
   func endpointsAreTransparent() throws {
     let first = try #require(snapshot(progress: 0))
