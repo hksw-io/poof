@@ -208,6 +208,163 @@ struct PoofSimulationTests {
     }
   }
 
+  @Test("Source-cover variation is coherent and repeatable")
+  func stableSourceCoverVariation() throws {
+    let first = PoofSimulation.makeFrameSet(
+      configuration: PoofConfiguration(seed: 1),
+      variationSeed: 1
+    )
+    let repeated = PoofSimulation.makeFrameSet(
+      configuration: PoofConfiguration(seed: 1),
+      variationSeed: 1
+    )
+    let second = PoofSimulation.makeFrameSet(
+      configuration: PoofConfiguration(seed: 2),
+      variationSeed: 2
+    )
+
+    for aspect in [
+      PoofSourceCoverAspect.square,
+      .wide,
+      .tall,
+    ] {
+      let firstGlyphs = first.sourceCoverGlyphs(for: aspect)
+      let repeatedGlyphs = repeated.sourceCoverGlyphs(for: aspect)
+      let secondGlyphs = second.sourceCoverGlyphs(for: aspect)
+
+      #expect(firstGlyphs.count == PoofSourceCoverLayout.glyphCount)
+      #expect(firstGlyphs == repeatedGlyphs)
+      #expect(firstGlyphs != secondGlyphs)
+      #expect(
+        firstGlyphs.allSatisfy {
+          $0.x.isFinite
+            && $0.y.isFinite
+            && $0.width.isFinite
+            && $0.height.isFinite
+            && $0.rotation.isFinite
+        }
+      )
+    }
+    for item in [
+      (
+        aspect: PoofSourceCoverAspect.square,
+        size: CGSize(width: 84, height: 84)
+      ),
+      (
+        aspect: PoofSourceCoverAspect.wide,
+        size: CGSize(width: 132, height: 48)
+      ),
+      (
+        aspect: PoofSourceCoverAspect.tall,
+        size: CGSize(width: 48, height: 132)
+      ),
+    ] {
+      let glyphs = first.sourceCoverGlyphs(for: item.aspect)
+      let rootGlyphs =
+        glyphs.prefix(PoofSourceCoverLayout.rootGlyphCount)
+      let descendants =
+        glyphs.dropFirst(PoofSourceCoverLayout.rootGlyphCount)
+
+      #expect(glyphs.count == PoofSourceCoverLayout.glyphCount)
+      #expect(Set(rootGlyphs.map(\.clusterIndex)) == Set(0..<4))
+      #expect(
+        (0..<4).allSatisfy { clusterIndex in
+          rootGlyphs.filter {
+            $0.clusterIndex == clusterIndex
+          }.count == 3
+        }
+      )
+      #expect(
+        rootGlyphs.allSatisfy {
+          $0.lineageParentIndex == nil
+        }
+      )
+      #expect(
+        descendants.enumerated().allSatisfy { offset, glyph in
+          guard let parentIndex = glyph.lineageParentIndex else {
+            return false
+          }
+
+          return parentIndex
+            < offset + PoofSourceCoverLayout.rootGlyphCount
+            && glyphs[parentIndex].clusterIndex == glyph.clusterIndex
+        }
+      )
+      let ordinaryChildIndices =
+        Array(
+          PoofSourceCoverLayout
+            .rootGlyphCount..<PoofSourceCoverLayout
+            .baseGlyphCount
+        )
+        + Array(
+          (PoofSourceCoverLayout.baseGlyphCount
+            + PoofSourceCoverLayout.repairGlyphCount)..<PoofSourceCoverLayout.glyphCount
+        )
+
+      for childIndex in ordinaryChildIndices {
+        let child = glyphs[childIndex]
+        let parentIndex = try #require(child.lineageParentIndex)
+        let parent = glyphs[parentIndex]
+        let distance = hypot(
+          item.size.width * (child.x - parent.x),
+          item.size.height * (child.y - parent.y)
+        )
+        let childRadius =
+          0.45
+          * min(
+            item.size.width * child.width,
+            item.size.height * child.height
+          )
+        let parentRadius =
+          0.45
+          * min(
+            item.size.width * parent.width,
+            item.size.height * parent.height
+          )
+
+        #expect(
+          distance <= childRadius + parentRadius + 1e-9,
+          "\(item.aspect), child \(childIndex), distance \(distance)"
+        )
+      }
+      #expect(Set(glyphs.map(\.contour)) == [.puff4, .puff5])
+      #expect(quantizedValueCount(glyphs.map(\.x)) > 30)
+      #expect(quantizedValueCount(glyphs.map(\.y)) > 30)
+      #expect(quantizedValueCount(glyphs.map(\.width)) >= 8)
+      #expect(
+        Set(
+          glyphs.map {
+            ($0.paletteIndex + $0.tone.rawValue) % 4
+          }
+        ).count >= 3
+      )
+    }
+  }
+
+  @Test("Source-cover generation can target one aspect")
+  func targetedSourceCoverGeneration() {
+    for aspect in PoofSourceCoverAspect.allCases {
+      let frameSet = PoofSimulation.makeFrameSet(
+        configuration: PoofConfiguration(seed: 42),
+        sourceCoverAspect: aspect,
+        variationSeed: 42
+      )
+
+      #expect(frameSet.sourceCoverAspect == aspect)
+      #expect(
+        frameSet.sourceCoverGlyphs(for: aspect).count
+          == PoofSourceCoverLayout.glyphCount
+      )
+
+      for unusedAspect in PoofSourceCoverAspect.allCases
+      where unusedAspect != aspect {
+        #expect(
+          frameSet.sourceCoverGlyphs(for: unusedAspect).isEmpty
+        )
+      }
+    }
+  }
+
   @Test("Different playback seeds only make slight variations")
   func boundedVariation() {
     let configuration = PoofConfiguration(
@@ -306,6 +463,141 @@ struct PoofSimulationTests {
     #expect(breakupAverage > openingAverage * 2)
   }
 
+  @Test("Explicit classic style preserves the original descriptors")
+  func classicCompatibility() {
+    let configuration = PoofConfiguration(seed: 0x504F_4F46)
+    let implicit = PoofSimulation.makeFrameSet(
+      configuration: configuration,
+      variationSeed: 0xCAFE_BABE
+    )
+    let explicit = PoofSimulation.makeFrameSet(
+      configuration: configuration,
+      style: .classic,
+      variationSeed: 0xCAFE_BABE
+    )
+
+    for pose in PoofPose.allCases {
+      #expect(implicit.glyphs(for: pose) == explicit.glyphs(for: pose))
+    }
+  }
+
+  @Test("Every style is deterministic, distinct, and bounded")
+  func styledDescriptors() {
+    let configuration = PoofConfiguration(
+      particleCount: 64,
+      spread: 1.10,
+      seed: 0x504F_4F46
+    )
+    let styles: [PoofStyle] = [.classic, .bloom, .snap, .drift]
+
+    for style in styles {
+      for pose in PoofPose.allCases {
+        let first = glyphs(
+          for: pose,
+          in: configuration,
+          seed: 0xCAFE_BABE,
+          style: style
+        )
+        let repeated = glyphs(
+          for: pose,
+          in: configuration,
+          seed: 0xCAFE_BABE,
+          style: style
+        )
+
+        #expect(first == repeated)
+        #expect(first.isEmpty == false)
+        #expect(first.count <= 64)
+
+        for glyph in first {
+          #expect(glyph.x.isFinite)
+          #expect(glyph.y.isFinite)
+          #expect(glyph.width.isFinite)
+          #expect(glyph.height.isFinite)
+          #expect(glyph.opacity.isFinite)
+          #expect(glyph.rotation.isFinite)
+          #expect(abs(glyph.x) <= 0.60)
+          #expect(abs(glyph.y) <= 0.60)
+          #expect((0...1).contains(glyph.width))
+          #expect((0...1).contains(glyph.height))
+          #expect((0...1).contains(glyph.opacity))
+        }
+      }
+    }
+
+    let classic = glyphs(
+      for: .puffs,
+      in: configuration,
+      seed: 0xCAFE_BABE,
+      style: .classic
+    )
+
+    for style in [PoofStyle.bloom, .snap, .drift] {
+      #expect(
+        glyphs(
+          for: .puffs,
+          in: configuration,
+          seed: 0xCAFE_BABE,
+          style: style
+        ) != classic
+      )
+    }
+  }
+
+  @Test("Modern styles follow distinct pose trajectories")
+  func styleTrajectories() {
+    let configuration = PoofConfiguration(seed: 0x504F_4F46)
+    let seed: UInt64 = 0xCAFE_BABE
+    let classicPuffs = glyphs(
+      for: .puffs,
+      in: configuration,
+      seed: seed
+    )
+    let bloomPuffs = glyphs(
+      for: .puffs,
+      in: configuration,
+      seed: seed,
+      style: .bloom
+    )
+
+    #expect(
+      meanArea(of: bloomPuffs)
+        > meanArea(of: classicPuffs) * 1.8
+    )
+
+    let snapRadii = [PoofPose.puffs, .wisps, .ringlets].map { pose in
+      meanRadius(
+        of: glyphs(
+          for: pose,
+          in: configuration,
+          seed: seed,
+          style: .snap
+        )
+      )
+    }
+
+    #expect(snapRadii[0] < snapRadii[1])
+    #expect(snapRadii[1] < snapRadii[2])
+
+    let driftPoses = [PoofPose.puffs, .wisps, .ringlets].map { pose in
+      glyphs(
+        for: pose,
+        in: configuration,
+        seed: seed,
+        style: .drift
+      )
+    }
+    let driftCenters = driftPoses.map(meanY)
+
+    #expect(driftCenters[0] > driftCenters[1])
+    #expect(driftCenters[1] > driftCenters[2])
+    #expect(driftCenters[2] < -0.25)
+
+    let ringletY = driftPoses[2].map(\.y)
+    let ringletHeight = (ringletY.max() ?? 0) - (ringletY.min() ?? 0)
+    #expect(ringletHeight > 0.25)
+  }
+
   @Test("The sequence uses every organic contour")
   func contourCoverage() {
     let seed: UInt64 = 0x504F_4F46
@@ -373,7 +665,8 @@ struct PoofSimulationTests {
   private func glyphs(
     for pose: PoofPose,
     in configuration: PoofConfiguration,
-    seed: UInt64
+    seed: UInt64,
+    style: PoofStyle = .classic
   ) -> [PoofGlyph] {
     (0..<PoofSimulation.glyphCount(
       for: pose,
@@ -384,8 +677,32 @@ struct PoofSimulationTests {
         at: index,
         pose: pose,
         configuration: configuration,
+        style: style,
         variationSeed: seed
       )
     }
   }
+
+  private func meanArea(of glyphs: [PoofGlyph]) -> Double {
+    glyphs.reduce(0) { area, glyph in
+      area + glyph.width * glyph.height
+    } / Double(glyphs.count)
+  }
+
+  private func meanRadius(of glyphs: [PoofGlyph]) -> Double {
+    glyphs.reduce(0) { radius, glyph in
+      radius + hypot(glyph.x, glyph.y)
+    } / Double(glyphs.count)
+  }
+
+  private func meanY(of glyphs: [PoofGlyph]) -> Double {
+    glyphs.reduce(0) { y, glyph in
+      y + glyph.y
+    } / Double(glyphs.count)
+  }
+
+  private func quantizedValueCount(_ values: [Double]) -> Int {
+    Set(values.map { Int(($0 * 10_000).rounded()) }).count
+  }
+
 }

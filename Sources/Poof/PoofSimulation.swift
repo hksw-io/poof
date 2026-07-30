@@ -62,20 +62,104 @@ struct PoofGlyph: Equatable, Sendable {
   }
 }
 
+enum PoofSourceCoverAspect: CaseIterable, Hashable, Sendable {
+  case square
+  case wide
+  case tall
+
+  init(size: CGSize) {
+    if size.width > size.height * 1.4 {
+      self = .wide
+    } else if size.height > size.width * 1.4 {
+      self = .tall
+    } else {
+      self = .square
+    }
+  }
+}
+
+struct PoofSourceCoverGlyph: Equatable, Sendable {
+  let x: Double
+  let y: Double
+  let width: Double
+  let height: Double
+  let rotation: Double
+  let contour: PoofContour
+  let tone: PoofTone
+  let paletteIndex: Int
+  let clusterIndex: Int
+  let lineageParentIndex: Int?
+}
+
+struct PoofSourceCoverLayout: Equatable, Sendable {
+  static let glyphCount = 64
+  static let rootGlyphCount = 12
+  static let repairGlyphCount = 10
+  static let fringeGlyphCount = 12
+  static let baseGlyphCount =
+    glyphCount - repairGlyphCount - fringeGlyphCount
+  static let cloudGlyphCount = rootGlyphCount
+  static let openingGlyphCount = glyphCount
+
+  private let square: [PoofSourceCoverGlyph]
+  private let wide: [PoofSourceCoverGlyph]
+  private let tall: [PoofSourceCoverGlyph]
+
+  init(
+    square: [PoofSourceCoverGlyph],
+    wide: [PoofSourceCoverGlyph],
+    tall: [PoofSourceCoverGlyph]
+  ) {
+    self.square = square
+    self.wide = wide
+    self.tall = tall
+  }
+
+  func glyphs(for aspect: PoofSourceCoverAspect) -> [PoofSourceCoverGlyph] {
+    switch aspect {
+    case .square:
+      square
+    case .wide:
+      wide
+    case .tall:
+      tall
+    }
+  }
+}
+
 struct PoofFrameSet: Sendable {
   let configuration: PoofConfiguration
+  let style: PoofStyle
   private let poses: [[PoofGlyph]]
+  private let sourceCoverLayout: PoofSourceCoverLayout?
+  let sourceCoverAspect: PoofSourceCoverAspect?
+
+  var coversSource: Bool {
+    sourceCoverLayout != nil
+  }
 
   init(
     configuration: PoofConfiguration,
-    poses: [[PoofGlyph]]
+    style: PoofStyle,
+    poses: [[PoofGlyph]],
+    sourceCoverLayout: PoofSourceCoverLayout?,
+    sourceCoverAspect: PoofSourceCoverAspect?
   ) {
     self.configuration = configuration
+    self.style = style
     self.poses = poses
+    self.sourceCoverLayout = sourceCoverLayout
+    self.sourceCoverAspect = sourceCoverAspect
   }
 
   func glyphs(for pose: PoofPose) -> [PoofGlyph] {
     poses[pose.rawValue]
+  }
+
+  func sourceCoverGlyphs(
+    for aspect: PoofSourceCoverAspect
+  ) -> [PoofSourceCoverGlyph] {
+    sourceCoverLayout?.glyphs(for: aspect) ?? []
   }
 }
 
@@ -84,11 +168,17 @@ enum PoofSimulation {
   static let duration = frameDuration * Double(PoofPose.allCases.count)
 
   private static let referenceSpread = 0.82
+  // Stable index angles keep each Snap glyph on one ray across breakup poses.
+  private static let goldenAngle = 2.399_963_229_728_653
   // Extra glyph placement needs a stable base before playback variation.
   private static let fallbackLayoutSeed: UInt64 = 0x504F_4F46
+  static let sourceCoverGeometryProfileCount = 64
 
   static func makeFrameSet(
     configuration: PoofConfiguration,
+    style: PoofStyle = .classic,
+    coversSource: Bool = true,
+    sourceCoverAspect: PoofSourceCoverAspect? = nil,
     variationSeed: UInt64
   ) -> PoofFrameSet {
     let poses = PoofPose.allCases.map { pose in
@@ -98,6 +188,7 @@ enum PoofSimulation {
             at: index,
             pose: pose,
             configuration: configuration,
+            style: style,
             variationSeed: variationSeed
           )
         }
@@ -105,7 +196,17 @@ enum PoofSimulation {
 
     return PoofFrameSet(
       configuration: configuration,
-      poses: poses
+      style: style,
+      poses: poses,
+      sourceCoverLayout:
+        coversSource
+        ? sourceCoverLayout(
+          seed: variationSeed,
+          clusterGlyphs: poses[PoofPose.clusters.rawValue],
+          aspect: sourceCoverAspect
+        )
+        : nil,
+      sourceCoverAspect: coversSource ? sourceCoverAspect : nil
     )
   }
 
@@ -151,6 +252,7 @@ enum PoofSimulation {
     at index: Int,
     pose: PoofPose,
     configuration: PoofConfiguration,
+    style: PoofStyle = .classic,
     variationSeed: UInt64
   ) -> PoofGlyph? {
     let glyph: PoofGlyph?
@@ -172,20 +274,23 @@ enum PoofSimulation {
       return nil
     }
 
-    return varied(
+    let variedGlyph = varied(
       styled(
-        matchedReferenceGeometry(
-          glyph,
-          pose: pose,
-          index: index
-        ),
+        matchedReferenceGeometry(glyph, pose: pose, index: index),
         pose: pose,
-        index: index
+        index: index,
+        style: style
       ),
       pose: pose,
       index: index,
       seed: variationSeed
     )
+
+    if style == .classic {
+      return variedGlyph
+    }
+
+    return boundedModernGlyph(variedGlyph)
   }
 
   // MARK: - Opening layouts
@@ -853,7 +958,8 @@ enum PoofSimulation {
   private static func styled(
     _ glyph: PoofGlyph,
     pose: PoofPose,
-    index: Int
+    index: Int,
+    style: PoofStyle
   ) -> PoofGlyph {
     let contour: PoofContour
     let paint: PoofPaint
@@ -918,7 +1024,7 @@ enum PoofSimulation {
       }
     }
 
-    return PoofGlyph(
+    let classicGlyph = PoofGlyph(
       x: glyph.x,
       y: glyph.y,
       width: glyph.width,
@@ -926,6 +1032,289 @@ enum PoofSimulation {
       opacity: glyph.opacity,
       contour: contour,
       paint: paint,
+      rotation: glyph.rotation,
+      tone: glyph.tone
+    )
+
+    switch style {
+    case .classic:
+      return classicGlyph
+    case .bloom:
+      return bloomGlyph(classicGlyph, pose: pose, index: index)
+    case .snap:
+      return snapGlyph(classicGlyph, pose: pose, index: index)
+    case .drift:
+      return driftGlyph(classicGlyph, pose: pose, index: index)
+    }
+  }
+
+  private static func bloomGlyph(
+    _ glyph: PoofGlyph,
+    pose: PoofPose,
+    index: Int
+  ) -> PoofGlyph {
+    let positionScale: Double
+    let sizeScale: Double
+
+    switch pose {
+    case .cloud:
+      positionScale = 0.72
+      sizeScale = 1.18
+    case .clusters:
+      positionScale = 0.72
+      sizeScale = 1.15
+    case .puffs:
+      positionScale = 0.88
+      sizeScale = 1.44
+    case .wisps:
+      positionScale = 0.80
+      sizeScale = 1.50
+    case .ringlets:
+      positionScale = 0.72
+      sizeScale = 1.58
+    }
+
+    let averageSize = (glyph.width + glyph.height) / 2
+    let contour: PoofContour
+    let paint: PoofPaint
+
+    switch pose {
+    case .cloud, .clusters:
+      contour = .puff5
+      paint = .fillAndOutline
+    case .puffs:
+      contour =
+        index.isMultiple(of: 7)
+        ? .ring
+        : .puff5
+      paint =
+        contour == .ring
+        ? .fillOutlineAndInset
+        : .fillAndOutline
+    case .wisps:
+      contour = index.isMultiple(of: 3) ? .ring : .puff5
+      paint =
+        contour == .ring
+        ? .fillOutlineAndInset
+        : .fillAndOutline
+    case .ringlets:
+      contour = index.isMultiple(of: 3) ? .curl : .ring
+      paint = .doubleStroke
+    }
+
+    return PoofGlyph(
+      x: glyph.x * positionScale,
+      y: glyph.y * positionScale - 0.008,
+      width: averageSize * sizeScale,
+      height: averageSize * sizeScale,
+      opacity: glyph.opacity,
+      contour: contour,
+      paint: paint,
+      rotation: 0,
+      tone: index.isMultiple(of: 7) ? .middle : .light
+    )
+  }
+
+  private static func snapGlyph(
+    _ glyph: PoofGlyph,
+    pose: PoofPose,
+    index: Int
+  ) -> PoofGlyph {
+    switch pose {
+    case .cloud, .clusters:
+      let positionScale = pose == .cloud ? 0.55 : 0.68
+      let sizeScale = pose == .cloud ? 0.78 : 0.68
+
+      return PoofGlyph(
+        x: glyph.x * positionScale,
+        y: glyph.y * positionScale,
+        width: glyph.width * sizeScale,
+        height: glyph.height * sizeScale,
+        opacity: glyph.opacity,
+        contour: .puff4,
+        paint: .fillAndOutline,
+        rotation: glyph.rotation,
+        tone: index.isMultiple(of: 5) ? .middle : .light
+      )
+    case .puffs, .wisps, .ringlets:
+      let angle = Double(index) * goldenAngle
+      let baseRadius = hypot(glyph.x, glyph.y)
+      let radius: Double
+      let width: Double
+      let height: Double
+
+      switch pose {
+      case .puffs:
+        radius = 0.16 + baseRadius * 0.55
+        width = max(glyph.width * 0.72, 0.10)
+        height = max(glyph.height * 0.45, 0.045)
+      case .wisps:
+        radius = 0.29 + baseRadius * 0.48
+        width = max(glyph.width * 0.62, 0.082)
+        height = max(glyph.height * 0.34, 0.032)
+      case .ringlets:
+        radius = 0.41 + baseRadius * 0.36
+        width = max(glyph.width * 0.52, 0.062)
+        height = max(glyph.height * 0.28, 0.024)
+      case .cloud, .clusters:
+        preconditionFailure("Opening poses return before breakup geometry")
+      }
+
+      let contour: PoofContour
+      let paint: PoofPaint
+
+      switch (pose, index % 4) {
+      case (.puffs, 0), (.puffs, 1):
+        contour = index.isMultiple(of: 2) ? .puff4 : .puff5
+        paint = .fillAndOutline
+      case (.puffs, 2), (.wisps, 0), (.ringlets, 0):
+        contour = .fleck
+        paint = .fillAndOutline
+      case (_, 3), (.wisps, 1), (.ringlets, 1):
+        contour = .ring
+        paint = .doubleStroke
+      default:
+        contour = .curl
+        paint = .doubleStroke
+      }
+
+      return PoofGlyph(
+        x: cos(angle) * radius,
+        y: sin(angle) * radius,
+        width: width,
+        height: height,
+        opacity: glyph.opacity,
+        contour: contour,
+        paint: paint,
+        rotation: angle,
+        tone: index.isMultiple(of: 5) ? .middle : .light
+      )
+    }
+  }
+
+  private static func driftGlyph(
+    _ glyph: PoofGlyph,
+    pose: PoofPose,
+    index: Int
+  ) -> PoofGlyph {
+    let lift: Double
+    let shear: Double
+    let positionScaleX: Double
+    let positionScaleY: Double
+    let widthScale: Double
+    let heightScale: Double
+    let offsetX: Double
+
+    switch pose {
+    case .cloud:
+      lift = 0.020
+      shear = 0.04
+      positionScaleX = 0.86
+      positionScaleY = 0.86
+      widthScale = 0.92
+      heightScale = 1.08
+      offsetX = -0.015
+    case .clusters:
+      lift = 0.080
+      shear = 0.08
+      positionScaleX = 0.86
+      positionScaleY = 0.84
+      widthScale = 0.90
+      heightScale = 1.12
+      offsetX = 0
+    case .puffs:
+      lift = 0.140
+      shear = 0.18
+      positionScaleX = 0.76
+      positionScaleY = 0.80
+      widthScale = 0.78
+      heightScale = 1.25
+      offsetX = 0.030
+    case .wisps:
+      lift = 0.250
+      shear = 0.26
+      positionScaleX = 0.68
+      positionScaleY = 0.84
+      widthScale = 0.68
+      heightScale = 1.35
+      offsetX = 0.070
+    case .ringlets:
+      lift = 0.360
+      shear = 0.36
+      positionScaleX = 0.58
+      positionScaleY = 0.88
+      widthScale = 0.58
+      heightScale = 1.25
+      offsetX = 0.110
+    }
+
+    let contour: PoofContour
+    let paint: PoofPaint
+
+    switch pose {
+    case .cloud, .clusters:
+      contour = index.isMultiple(of: 2) ? .puff5 : .puff4
+      paint = .fillAndOutline
+    case .puffs:
+      contour =
+        index.isMultiple(of: 5)
+        ? .curl
+        : (index.isMultiple(of: 3) ? .ring : .puff5)
+      paint =
+        contour == .puff5
+        ? .fillAndOutline
+        : .doubleStroke
+    case .wisps:
+      contour = index.isMultiple(of: 3) ? .ring : .curl
+      paint = .doubleStroke
+    case .ringlets:
+      contour = index.isMultiple(of: 4) ? .fleck : .curl
+      paint =
+        contour == .fleck
+        ? .fillAndOutline
+        : .doubleStroke
+    }
+
+    return PoofGlyph(
+      x: glyph.x * positionScaleX - glyph.y * shear + offsetX,
+      y: glyph.y * positionScaleY - lift,
+      width: glyph.width * widthScale,
+      height: glyph.height * heightScale,
+      opacity: glyph.opacity * (pose == .ringlets ? 0.90 : 0.96),
+      contour: contour,
+      paint: paint,
+      rotation: glyph.rotation - shear * 0.80,
+      tone: index.isMultiple(of: 6) ? .middle : .light
+    )
+  }
+
+  private static func boundedModernGlyph(_ glyph: PoofGlyph) -> PoofGlyph {
+    let renderedHeight =
+      glyph.height * (glyph.contour == .curl ? 1.60 : 1)
+    let cosine = abs(cos(glyph.rotation))
+    let sine = abs(sin(glyph.rotation))
+    let halfWidth = glyph.width / 2
+    let halfHeight = renderedHeight / 2
+    let extentX = halfWidth * cosine + halfHeight * sine
+    let extentY = halfWidth * sine + halfHeight * cosine
+    // Reserve room for outlines and the optional blurred shadow.
+    let drawingLimit = 0.43
+    let centerLimitX = max(0, drawingLimit - extentX)
+    let centerLimitY = max(0, drawingLimit - extentY)
+    let scaleX =
+      glyph.x == 0 ? 1 : centerLimitX / abs(glyph.x)
+    let scaleY =
+      glyph.y == 0 ? 1 : centerLimitY / abs(glyph.y)
+    let positionScale = min(1, scaleX, scaleY)
+
+    return PoofGlyph(
+      x: glyph.x * positionScale,
+      y: glyph.y * positionScale,
+      width: glyph.width,
+      height: glyph.height,
+      opacity: glyph.opacity,
+      contour: glyph.contour,
+      paint: glyph.paint,
       rotation: glyph.rotation,
       tone: glyph.tone
     )
@@ -994,6 +1383,809 @@ enum PoofSimulation {
       rotation: glyph.rotation,
       tone: glyph.tone
     )
+  }
+
+  private static func sourceCoverLayout(
+    seed: UInt64,
+    clusterGlyphs: [PoofGlyph],
+    aspect: PoofSourceCoverAspect?
+  ) -> PoofSourceCoverLayout {
+    let geometrySeed = sourceCoverGeometrySeed(for: seed)
+    let includesSquare = aspect == nil || aspect == .square
+    let includesWide = aspect == nil || aspect == .wide
+    let includesTall = aspect == nil || aspect == .tall
+    let square =
+      includesSquare
+      ? organicSourceCoverGlyphs(
+        seed: geometrySeed,
+        variationSeed: seed,
+        clusterGlyphs: clusterGlyphs,
+        sourceWidth: 84,
+        sourceHeight: 84,
+        keyOffset: 0
+      )
+      : []
+    let wide =
+      includesWide
+      ? organicSourceCoverGlyphs(
+        seed: geometrySeed,
+        variationSeed: seed,
+        clusterGlyphs: clusterGlyphs,
+        sourceWidth: 132,
+        sourceHeight: 48,
+        keyOffset: 0x1_0000
+      )
+      : []
+    let tall =
+      includesTall
+      ? organicSourceCoverGlyphs(
+        seed: geometrySeed,
+        variationSeed: seed,
+        clusterGlyphs: clusterGlyphs,
+        sourceWidth: 48,
+        sourceHeight: 132,
+        keyOffset: 0x2_0000
+      )
+      : []
+
+    return PoofSourceCoverLayout(
+      square: square,
+      wide: wide,
+      tall: tall
+    )
+  }
+
+  private static func organicSourceCoverGlyphs(
+    seed: UInt64,
+    variationSeed: UInt64,
+    clusterGlyphs: [PoofGlyph],
+    sourceWidth: Double,
+    sourceHeight: Double,
+    keyOffset: UInt64
+  ) -> [PoofSourceCoverGlyph] {
+    let artSide = min(
+      max((sourceWidth * sourceHeight).squareRoot(), 42),
+      160
+    )
+    let glyphs = sourceCoverGlyphs(
+      seed: seed,
+      variationSeed: variationSeed,
+      clusterGlyphs: clusterGlyphs,
+      sourceWidth: sourceWidth,
+      sourceHeight: sourceHeight,
+      artSide: artSide,
+      keyOffset: keyOffset
+    )
+    return sourceCoverGlyphsSizedForCoverage(
+      glyphs,
+      seed: seed,
+      sourceWidth: sourceWidth,
+      sourceHeight: sourceHeight,
+      artSide: artSide,
+      keyOffset: keyOffset
+    )
+  }
+
+  private static func sourceCoverGlyphs(
+    seed: UInt64,
+    variationSeed: UInt64,
+    clusterGlyphs: [PoofGlyph],
+    sourceWidth: Double,
+    sourceHeight: Double,
+    artSide: Double,
+    keyOffset: UInt64
+  ) -> [PoofSourceCoverGlyph] {
+    let halfWidth = sourceWidth / 2
+    let halfHeight = sourceHeight / 2
+    let coverageInset = min(
+      artSide * 0.095,
+      min(sourceWidth, sourceHeight) * 0.17
+    )
+    let baseCoverageCount =
+      PoofSourceCoverLayout.baseGlyphCount
+    let repairEndIndex =
+      baseCoverageCount + PoofSourceCoverLayout.repairGlyphCount
+    var centers: [(x: Double, y: Double)] = []
+    var fringeAnchorIndices: [Int] = []
+    var glyphs: [PoofSourceCoverGlyph] = []
+    glyphs.reserveCapacity(PoofSourceCoverLayout.glyphCount)
+
+    for index in 0..<PoofSourceCoverLayout.glyphCount {
+      let key = keyOffset + UInt64(0x2200 + index * 0x20)
+      let center: (x: Double, y: Double)
+      let clusterIndex: Int
+      let lineageParentIndex: Int?
+
+      if index < PoofSourceCoverLayout.rootGlyphCount {
+        clusterIndex = index % max(clusterGlyphs.count, 1)
+        lineageParentIndex = nil
+
+        let cluster =
+          clusterGlyphs.indices.contains(clusterIndex)
+          ? clusterGlyphs[clusterIndex]
+          : PoofGlyph(x: 0, y: 0, width: 0.3, height: 0.3)
+        let siblingIndex = index / max(clusterGlyphs.count, 1)
+        let outwardAngle = atan2(cluster.y, cluster.x)
+        let angle =
+          outwardAngle
+          + (Double(siblingIndex) - 1) * 0.82
+          + noise(seed: seed, key: key + 13) * 0.28
+        let distance =
+          artSide
+          * coverUnitNoise(
+            seed: seed,
+            key: key + 14,
+            in: 0.035...0.09
+          )
+
+        let candidateX =
+          cluster.x * artSide + cos(angle) * distance
+        let candidateY =
+          cluster.y * artSide + sin(angle) * distance
+        center = (
+          x: min(
+            max(candidateX, -halfWidth + coverageInset),
+            halfWidth - coverageInset
+          ),
+          y: min(
+            max(candidateY, -halfHeight + coverageInset),
+            halfHeight - coverageInset
+          )
+        )
+      } else if index < baseCoverageCount {
+        var bestCandidate = centers[0]
+        var bestParentIndex = 0
+        var bestScore = -Double.infinity
+
+        // Grow a seeded tree in short overlapping steps. Candidate targets
+        // explore the source while the step limit preserves visual lineage.
+        for candidateIndex in 0..<96 {
+          let candidateKey =
+            keyOffset + 0x5000
+            + UInt64(index) * 0x1000
+            + UInt64(candidateIndex) * 0x20
+          let targetX = coverUnitNoise(
+            seed: seed,
+            key: candidateKey + 2,
+            in: (-halfWidth + coverageInset)...(halfWidth - coverageInset)
+          )
+          let targetY = coverUnitNoise(
+            seed: seed,
+            key: candidateKey + 3,
+            in: (-halfHeight + coverageInset)...(halfHeight - coverageInset)
+          )
+          let parentIndex =
+            centers.indices.min {
+              let firstX = targetX - centers[$0].x
+              let firstY = targetY - centers[$0].y
+              let secondX = targetX - centers[$1].x
+              let secondY = targetY - centers[$1].y
+              return firstX * firstX + firstY * firstY
+                < secondX * secondX + secondY * secondY
+            } ?? 0
+          let parent = centers[parentIndex]
+          let targetDistance = hypot(
+            targetX - parent.x,
+            targetY - parent.y
+          )
+          guard targetDistance > 0 else {
+            continue
+          }
+          let stepLength = min(
+            targetDistance,
+            artSide
+              * coverUnitNoise(
+                seed: seed,
+                key: candidateKey + 4,
+                in: 0.11...0.19
+              )
+          )
+          let unitX = (targetX - parent.x) / targetDistance
+          let unitY = (targetY - parent.y) / targetDistance
+          let tangentOffset =
+            noise(seed: seed, key: candidateKey + 5)
+            * artSide * 0.035
+          let candidate = (
+            x: min(
+              max(
+                parent.x + unitX * stepLength - unitY * tangentOffset,
+                -halfWidth + coverageInset
+              ),
+              halfWidth - coverageInset
+            ),
+            y: min(
+              max(
+                parent.y + unitY * stepLength + unitX * tangentOffset,
+                -halfHeight + coverageInset
+              ),
+              halfHeight - coverageInset
+            )
+          )
+          let nearestSquaredDistance =
+            centers.reduce(Double.infinity) { distance, center in
+              let deltaX = candidate.x - center.x
+              let deltaY = candidate.y - center.y
+              return min(
+                distance,
+                deltaX * deltaX + deltaY * deltaY
+              )
+            }
+          let nearestDistance = nearestSquaredDistance.squareRoot()
+          let score =
+            nearestDistance
+            * coverUnitNoise(
+              seed: seed,
+              key: candidateKey + 6,
+              in: 0.62...1.38
+            )
+            + targetDistance * 0.08
+
+          if score > bestScore {
+            bestCandidate = candidate
+            bestParentIndex =
+              centers.indices.min {
+                let firstX = candidate.x - centers[$0].x
+                let firstY = candidate.y - centers[$0].y
+                let secondX = candidate.x - centers[$1].x
+                let secondY = candidate.y - centers[$1].y
+                return firstX * firstX + firstY * firstY
+                  < secondX * secondX + secondY * secondY
+              } ?? parentIndex
+            bestScore = score
+          }
+        }
+
+        center = bestCandidate
+        lineageParentIndex = bestParentIndex
+        clusterIndex = glyphs[bestParentIndex].clusterIndex
+      } else {
+        let baseParents = Set(
+          glyphs.prefix(baseCoverageCount)
+            .compactMap(\.lineageParentIndex)
+        )
+        let leaves =
+          (PoofSourceCoverLayout.rootGlyphCount..<baseCoverageCount)
+          .filter {
+            !baseParents.contains($0)
+              && !fringeAnchorIndices.contains($0)
+          }
+        let availableAnchors =
+          leaves.isEmpty
+          ? (0..<baseCoverageCount).filter {
+            !fringeAnchorIndices.contains($0)
+          }
+          : leaves
+        let anchorIndex =
+          availableAnchors.max {
+            let first = centers[$0]
+            let second = centers[$1]
+            let firstReach = max(
+              abs(first.x / max(halfWidth, 1)),
+              abs(first.y / max(halfHeight, 1))
+            )
+            let secondReach = max(
+              abs(second.x / max(halfWidth, 1)),
+              abs(second.y / max(halfHeight, 1))
+            )
+            let firstScore =
+              firstReach
+              + noise(seed: seed, key: key + UInt64($0)) * 0.42
+            let secondScore =
+              secondReach
+              + noise(seed: seed, key: key + UInt64($1)) * 0.42
+            return firstScore < secondScore
+          } ?? 0
+
+        if index >= repairEndIndex {
+          fringeAnchorIndices.append(anchorIndex)
+        }
+
+        let anchor = centers[anchorIndex]
+        let parentIndex =
+          glyphs[anchorIndex].lineageParentIndex ?? 0
+        let parent = centers[parentIndex]
+        let branchX =
+          index < repairEndIndex
+          ? anchor.x - parent.x
+          : anchor.x
+        let branchY =
+          index < repairEndIndex
+          ? anchor.y - parent.y
+          : anchor.y
+        let branchLength = max(hypot(branchX, branchY), 0.001)
+        let unitX = branchX / branchLength
+        let unitY = branchY / branchLength
+        let outwardDistance =
+          artSide
+          * coverUnitNoise(
+            seed: seed,
+            key: key + 15,
+            in:
+              index < repairEndIndex
+              ? 0.04...0.085
+              : 0.02...0.10
+          )
+        let tangentScale: Double
+
+        if index < repairEndIndex {
+          tangentScale =
+            noise(seed: seed, key: key + 16) * 0.035
+        } else {
+          tangentScale =
+            noise(seed: seed, key: key + 16) * 0.025
+        }
+        let tangentDistance = tangentScale * artSide
+
+        center = (
+          x:
+            anchor.x + unitX * outwardDistance
+            - unitY * tangentDistance,
+          y:
+            anchor.y + unitY * outwardDistance
+            + unitX * tangentDistance
+        )
+        lineageParentIndex = anchorIndex
+        clusterIndex = glyphs[anchorIndex].clusterIndex
+      }
+
+      let sizeRange: ClosedRange<Double> =
+        if index < baseCoverageCount {
+          0.18...0.29
+        } else if index < repairEndIndex {
+          0.13...0.21
+        } else {
+          0.15...0.29
+        }
+      let size =
+        artSide
+        * coverUnitNoise(
+          seed: seed,
+          key: key + 2,
+          in: sizeRange
+        )
+      let aspect = coverUnitNoise(
+        seed: seed,
+        key: key + 3,
+        in: 0.94...1.06
+      )
+      let width = size * aspect
+      let height = size / aspect
+      let tone: PoofTone =
+        noise(seed: variationSeed, key: key + 5) > 0.58
+        ? .middle
+        : .light
+      let hueIndex = min(
+        Int(
+          coverUnitNoise(
+            seed: variationSeed,
+            key: key + 7,
+            in: 0...3.999
+          )
+        ),
+        3
+      )
+
+      glyphs.append(
+        PoofSourceCoverGlyph(
+          x: center.x / sourceWidth,
+          y: center.y / sourceHeight,
+          width: width / sourceWidth,
+          height: height / sourceHeight,
+          rotation:
+            Double(index) * 0.83
+            + noise(seed: seed, key: key + 6) * 0.45,
+          contour: index.isMultiple(of: 3) ? .puff5 : .puff4,
+          tone: tone,
+          paletteIndex: (hueIndex - tone.rawValue + 4) % 4,
+          clusterIndex: clusterIndex,
+          lineageParentIndex: lineageParentIndex
+        )
+      )
+      centers.append(center)
+    }
+
+    return glyphs
+  }
+
+  private static func warpedSourceCoverGlyphs(
+    _ glyphs: [PoofSourceCoverGlyph],
+    seed: UInt64,
+    sourceWidth: Double,
+    sourceHeight: Double,
+    artSide: Double,
+    keyOffset: UInt64
+  ) -> [PoofSourceCoverGlyph] {
+    let halfWidth = sourceWidth / 2
+    let halfHeight = sourceHeight / 2
+    let phaseX = coverUnitNoise(
+      seed: seed,
+      key: keyOffset + 0xA100,
+      in: 0...(2 * .pi)
+    )
+    let phaseY = coverUnitNoise(
+      seed: seed,
+      key: keyOffset + 0xA200,
+      in: 0...(2 * .pi)
+    )
+    let phaseDiagonal = coverUnitNoise(
+      seed: seed,
+      key: keyOffset + 0xA300,
+      in: 0...(2 * .pi)
+    )
+    let maximumCoordinateX = halfWidth + artSide * 0.13
+    let maximumCoordinateY = halfHeight + artSide * 0.13
+
+    return glyphs.map { glyph in
+      let x = glyph.x * sourceWidth
+      let y = glyph.y * sourceHeight
+      let normalizedX = x / max(halfWidth, 1)
+      let normalizedY = y / max(halfHeight, 1)
+      let normalizedReach = min(
+        max(abs(normalizedX), abs(normalizedY)),
+        1
+      )
+      let edgeProgress = min(
+        max((normalizedReach - 0.42) / 0.58, 0),
+        1
+      )
+      let edgeWeight =
+        edgeProgress * edgeProgress * (3 - 2 * edgeProgress)
+      let angle = atan2(normalizedY, normalizedX)
+      let radialLobe = min(
+        max(
+          0.58
+            + sin(angle * 3 + phaseX) * 0.25
+            + sin(angle * 5 + phaseY) * 0.12
+            + sin(angle * 2 + phaseDiagonal) * 0.08,
+          0.08
+        ),
+        1
+      )
+      let tangentialWave =
+        sin(angle * 2 + phaseDiagonal) * 0.22
+      let directionX = cos(angle)
+      let directionY = sin(angle)
+      let sourceAspect = sourceWidth / sourceHeight
+      let roundsSquareSource =
+        (0.75...1.33).contains(sourceAspect)
+      let sourceEdgeRadius = min(
+        halfWidth / max(abs(directionX), 0.001),
+        halfHeight / max(abs(directionY), 0.001)
+      )
+      // A square needs about 21% radial overscan to fit inside a round cloud.
+      // Vary that minimum by seed so the result does not become a circle.
+      let roundedEnvelopeRadius =
+        hypot(halfWidth, halfHeight) + artSide * 0.01
+      let roundingOffset =
+        roundsSquareSource
+        ? max(roundedEnvelopeRadius - sourceEdgeRadius, 0)
+          * (0.38 + radialLobe * 0.22)
+        : 0
+      let radialOffset =
+        edgeWeight
+        * (artSide * (0.006 + 0.035 * radialLobe)
+          + roundingOffset)
+      let tangentialOffset =
+        artSide * 0.025 * edgeWeight * tangentialWave
+      let warpedX = min(
+        max(
+          x + directionX * radialOffset - directionY * tangentialOffset,
+          -maximumCoordinateX
+        ),
+        maximumCoordinateX
+      )
+      let warpedY = min(
+        max(
+          y + directionY * radialOffset + directionX * tangentialOffset,
+          -maximumCoordinateY
+        ),
+        maximumCoordinateY
+      )
+
+      return PoofSourceCoverGlyph(
+        x: warpedX / sourceWidth,
+        y: warpedY / sourceHeight,
+        width: glyph.width,
+        height: glyph.height,
+        rotation: glyph.rotation,
+        contour: glyph.contour,
+        tone: glyph.tone,
+        paletteIndex: glyph.paletteIndex,
+        clusterIndex: glyph.clusterIndex,
+        lineageParentIndex: glyph.lineageParentIndex
+      )
+    }
+  }
+
+  private static func sourceCoverGlyphsSizedForCoverage(
+    _ glyphs: [PoofSourceCoverGlyph],
+    seed: UInt64,
+    sourceWidth: Double,
+    sourceHeight: Double,
+    artSide: Double,
+    keyOffset: UInt64
+  ) -> [PoofSourceCoverGlyph] {
+    let repairStartIndex =
+      PoofSourceCoverLayout.baseGlyphCount
+    let fringeStartIndex =
+      repairStartIndex + PoofSourceCoverLayout.repairGlyphCount
+    var resolvedGlyphs = glyphs
+
+    for repairIndex in repairStartIndex..<fringeStartIndex {
+      let gap = largestSourceCoverGap(
+        among: resolvedGlyphs.prefix(repairIndex),
+        seed: seed,
+        key: keyOffset + UInt64(repairIndex) * 0x100,
+        sourceWidth: sourceWidth,
+        sourceHeight: sourceHeight,
+        artSide: artSide
+      )
+      let repairInset = min(
+        artSide * 0.09,
+        min(sourceWidth, sourceHeight) * 0.18
+      )
+      // Keep repairs away from the exact source edge. Their puff paths still
+      // cover it without creating a row of boundary-clamped centers.
+      let repairCenter = (
+        x: min(
+          max(gap.x, -sourceWidth / 2 + repairInset),
+          sourceWidth / 2 - repairInset
+        ),
+        y: min(
+          max(gap.y, -sourceHeight / 2 + repairInset),
+          sourceHeight / 2 - repairInset
+        )
+      )
+      let parentIndex =
+        (0..<repairIndex).min {
+          let first = resolvedGlyphs[$0]
+          let second = resolvedGlyphs[$1]
+          return hypot(
+            repairCenter.x - sourceWidth * first.x,
+            repairCenter.y - sourceHeight * first.y
+          )
+            < hypot(
+              repairCenter.x - sourceWidth * second.x,
+              repairCenter.y - sourceHeight * second.y
+            )
+        } ?? 0
+      let glyph = resolvedGlyphs[repairIndex]
+      let currentWidth = sourceWidth * glyph.width
+      let currentHeight = sourceHeight * glyph.height
+      let aspect = max(
+        (currentWidth / currentHeight).squareRoot(),
+        0.001
+      )
+      let size = max(
+        (currentWidth * currentHeight).squareRoot(),
+        artSide * 0.22
+      )
+
+      resolvedGlyphs[repairIndex] = PoofSourceCoverGlyph(
+        x: repairCenter.x / sourceWidth,
+        y: repairCenter.y / sourceHeight,
+        width: size * aspect / sourceWidth,
+        height: size / aspect / sourceHeight,
+        rotation: glyph.rotation,
+        contour: glyph.contour,
+        tone: glyph.tone,
+        paletteIndex: glyph.paletteIndex,
+        clusterIndex: resolvedGlyphs[parentIndex].clusterIndex,
+        lineageParentIndex: parentIndex
+      )
+    }
+
+    let warpedGlyphs = warpedSourceCoverGlyphs(
+      resolvedGlyphs,
+      seed: seed,
+      sourceWidth: sourceWidth,
+      sourceHeight: sourceHeight,
+      artSide: artSide,
+      keyOffset: keyOffset
+    )
+    let fullySizedGlyphs = sizedSourceCoverGlyphs(
+      warpedGlyphs,
+      coverageCount: fringeStartIndex,
+      sourceWidth: sourceWidth,
+      sourceHeight: sourceHeight,
+      artSide: artSide
+    )
+
+    return fullySizedGlyphs
+  }
+
+  private static func sizedSourceCoverGlyphs(
+    _ glyphs: [PoofSourceCoverGlyph],
+    coverageCount: Int,
+    sourceWidth: Double,
+    sourceHeight: Double,
+    artSide: Double
+  ) -> [PoofSourceCoverGlyph] {
+    let cellSide = max(artSide * 0.02, 1)
+    let columnCount = max(Int(ceil(sourceWidth / cellSide)), 1)
+    let rowCount = max(Int(ceil(sourceHeight / cellSide)), 1)
+    let cellWidth = sourceWidth / Double(columnCount)
+    let cellHeight = sourceHeight / Double(rowCount)
+    let halfCellDiagonal = hypot(cellWidth, cellHeight) / 2
+    var requiredRadii = [Double](
+      repeating: 0,
+      count: glyphs.count
+    )
+
+    for row in 0..<rowCount {
+      for column in 0..<columnCount {
+        let cellCenterX =
+          -sourceWidth / 2
+          + (Double(column) + 0.5) * cellWidth
+        let cellCenterY =
+          -sourceHeight / 2
+          + (Double(row) + 0.5) * cellHeight
+        let nearestIndex =
+          (0..<coverageCount).min {
+            let first = glyphs[$0]
+            let second = glyphs[$1]
+            return hypot(
+              cellCenterX - sourceWidth * first.x,
+              cellCenterY - sourceHeight * first.y
+            )
+              < hypot(
+                cellCenterX - sourceWidth * second.x,
+                cellCenterY - sourceHeight * second.y
+              )
+          } ?? 0
+        let glyph = glyphs[nearestIndex]
+        let farthestDistance =
+          hypot(
+            cellCenterX - sourceWidth * glyph.x,
+            cellCenterY - sourceHeight * glyph.y
+          )
+          + halfCellDiagonal
+        requiredRadii[nearestIndex] = max(
+          requiredRadii[nearestIndex],
+          farthestDistance
+        )
+      }
+    }
+
+    return zip(glyphs, requiredRadii).enumerated().map {
+      index,
+      pair in
+      let (glyph, radius) = pair
+      let currentWidth = sourceWidth * glyph.width
+      let currentHeight = sourceHeight * glyph.height
+      let aspect = max(
+        (currentWidth / currentHeight).squareRoot(),
+        0.001
+      )
+      let minorScale = min(aspect, 1 / aspect)
+      let currentSize = (currentWidth * currentHeight).squareRoot()
+      let coverageSize =
+        radius / (0.30 * minorScale)
+      let size =
+        if index < coverageCount {
+          min(
+            max(currentSize, coverageSize),
+            artSide * 0.40
+          )
+        } else {
+          currentSize
+        }
+      let width = size * aspect
+      let height = size / aspect
+
+      return PoofSourceCoverGlyph(
+        x: glyph.x,
+        y: glyph.y,
+        width: width / sourceWidth,
+        height: height / sourceHeight,
+        rotation: glyph.rotation,
+        contour: glyph.contour,
+        tone: glyph.tone,
+        paletteIndex: glyph.paletteIndex,
+        clusterIndex: glyph.clusterIndex,
+        lineageParentIndex: glyph.lineageParentIndex
+      )
+    }
+  }
+
+  private static func largestSourceCoverGap(
+    among glyphs: ArraySlice<PoofSourceCoverGlyph>,
+    seed: UInt64,
+    key: UInt64,
+    sourceWidth: Double,
+    sourceHeight: Double,
+    artSide: Double
+  ) -> (x: Double, y: Double) {
+    let cellSide = max(artSide * 0.02, 1)
+    let columnCount = max(Int(ceil(sourceWidth / cellSide)), 1)
+    let rowCount = max(Int(ceil(sourceHeight / cellSide)), 1)
+    let cellWidth = sourceWidth / Double(columnCount)
+    let cellHeight = sourceHeight / Double(rowCount)
+    let discs = glyphs.map { glyph in
+      (
+        x: sourceWidth * glyph.x,
+        y: sourceHeight * glyph.y,
+        radius:
+          min(
+            sourceWidth * glyph.width,
+            sourceHeight * glyph.height
+          ) * 0.30
+      )
+    }
+    var largestGap = (x: 0.0, y: 0.0)
+    var largestDeficit = -Double.infinity
+
+    for row in 0..<rowCount {
+      for column in 0..<columnCount {
+        let cellKey =
+          key + UInt64(row * columnCount + column) * 0x10
+        let point = (
+          x:
+            -sourceWidth / 2
+            + (Double(column)
+              + coverUnitNoise(
+                seed: seed,
+                key: cellKey + 1,
+                in: 0.28...0.72
+              )) * cellWidth,
+          y:
+            -sourceHeight / 2
+            + (Double(row)
+              + coverUnitNoise(
+                seed: seed,
+                key: cellKey + 2,
+                in: 0.28...0.72
+              )) * cellHeight
+        )
+        var deficit = Double.infinity
+
+        for disc in discs {
+          deficit = min(
+            deficit,
+            hypot(
+              point.x - disc.x,
+              point.y - disc.y
+            ) - disc.radius
+          )
+        }
+
+        let score =
+          deficit
+          * coverUnitNoise(
+            seed: seed,
+            key: cellKey + 3,
+            in: 0.96...1.04
+          )
+
+        if score > largestDeficit {
+          largestGap = point
+          largestDeficit = score
+        }
+      }
+    }
+
+    return largestGap
+  }
+
+  private static func coverUnitNoise(
+    seed: UInt64,
+    key: UInt64,
+    in range: ClosedRange<Double>
+  ) -> Double {
+    let unit = (noise(seed: seed, key: key) + 1) / 2
+    return range.lowerBound
+      + (range.upperBound - range.lowerBound) * unit
+  }
+
+  private static func sourceCoverGeometrySeed(
+    for seed: UInt64
+  ) -> UInt64 {
+    // Every seed maps to one of the geometry profiles exhaustively exercised
+    // by the coverage tests.
+    let profile =
+      seed % UInt64(sourceCoverGeometryProfileCount)
+    return fallbackLayoutSeed
+      &+ profile &* 0x9E37_79B9_7F4A_7C15
   }
 
   private static func varied(

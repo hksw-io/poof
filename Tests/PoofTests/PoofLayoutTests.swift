@@ -17,12 +17,14 @@ struct PoofLayoutTests {
 
   @Test("Wide rows keep overscan bounded")
   func wideRow() {
-    let side = PoofLayout.fieldSide(
+    let size = PoofLayout.canvasSize(
       for: CGSize(width: 4_000, height: 44),
-      fieldScale: 3
+      fieldScale: 3,
+      coversSource: true
     )
 
-    #expect(side == 480)
+    #expect(size.width == 4_080)
+    #expect(size.height == 480)
   }
 
   @Test("Invalid geometry remains finite")
@@ -35,6 +37,22 @@ struct PoofLayoutTests {
     #expect(side.isFinite)
     #expect(
       side == 42 * CGFloat(PoofConfiguration.standard.fieldScale)
+    )
+  }
+
+  @Test("Source-cover aspect follows the laid-out bounds")
+  func sourceCoverAspect() {
+    #expect(
+      PoofSourceCoverAspect(size: CGSize(width: 84, height: 84))
+        == .square
+    )
+    #expect(
+      PoofSourceCoverAspect(size: CGSize(width: 132, height: 48))
+        == .wide
+    )
+    #expect(
+      PoofSourceCoverAspect(size: CGSize(width: 48, height: 132))
+        == .tall
     )
   }
 }
