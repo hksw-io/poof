@@ -44,7 +44,7 @@ In Xcode, choose **File → Add Package Dependencies** and enter:
 https://github.com/hksw-io/poof.git
 ```
 
-Set the dependency rule to **Branch** and enter `master`.
+Set the dependency rule to **Up to Next Major Version** starting at `1.0.0`.
 
 For a package manifest, add the package and product dependency:
 
@@ -52,7 +52,7 @@ For a package manifest, add the package and product dependency:
 dependencies: [
   .package(
     url: "https://github.com/hksw-io/poof.git",
-    branch: "master"
+    from: "1.0.0"
   )
 ],
 targets: [
@@ -64,10 +64,6 @@ targets: [
   )
 ]
 ```
-
-Poof does not have a tagged release yet, so installation currently tracks
-`master`. Pin a revision when an application release needs an immutable
-dependency.
 
 ## Quick start
 
@@ -87,7 +83,7 @@ struct ExampleView: View {
         if isVisible {
           Image(systemName: "shippingbox.fill")
             .font(.largeTitle)
-            .transition(.poof())
+            .transition(.poof(contentRemoval: .progressive))
         }
       }
       .frame(width: 80, height: 80)
@@ -110,9 +106,46 @@ struct ExampleView: View {
 }
 ```
 
-Poof affects removal only, so restoring the view does not play the animation
-backward. The `.poof` animation supplies the intended linear,
+This example uses progressive removal so the smoke covers the source as it
+disappears. Poof affects removal only, so restoring the view does not play the
+animation backward. The `.poof` animation supplies the intended linear,
 one-third-second timing.
+
+## Styles and gradual removal
+
+`classic` is the clean-room recreation and remains the default. Three opt-in
+styles keep the same five-pose timing while changing the character of the
+smoke:
+
+| Style | Character |
+| --- | --- |
+| `.classic` | Crisp, compact grayscale smoke |
+| `.bloom` | Round pastel clouds with a cartoony pop |
+| `.snap` | A tighter opening and punchier radial breakup |
+| `.drift` | Light curls and wisps that rise as they fade |
+
+Pass a style when you want something other than the classic poof:
+
+```swift
+.transition(.poof(style: .bloom))
+```
+
+The default `.immediate` removal hides the source as playback begins. Use
+`.progressive` to let dense smoke cover the source before it disappears:
+
+```swift
+.transition(
+  .poof(
+    style: .bloom,
+    contentRemoval: .progressive
+  )
+)
+```
+
+Progressive removal derives its cover from the source bounds, so the same API
+works with compact icons, circles, wide capsules, and irregular shapes. The
+smoke can cross the edge slightly to avoid tracing an obvious geometric
+outline.
 
 ## Supported platforms
 
@@ -172,6 +205,7 @@ struct PoofScrubber: View {
     VStack {
       PoofEffect(
         progress: progress,
+        style: .drift,
         configuration: PoofConfiguration(seed: 42)
       )
       .frame(width: 120, height: 120)
@@ -184,7 +218,8 @@ struct PoofScrubber: View {
 }
 ```
 
-`PoofEffect` draws only the smoke, and values at either endpoint draw nothing.
+The `style` argument is optional; omitting it uses `.classic`. `PoofEffect`
+draws only the smoke, and values at either endpoint draw nothing.
 When building a custom removal interaction, the caller is responsible for
 hiding the source view, disabling hit testing, and removing it from the
 accessibility tree. Use `.transition(.poof())` for the built-in behavior.
@@ -195,7 +230,8 @@ accessibility tree. Use `.transition(.poof())` for the built-in behavior.
   smoke. A standalone `PoofEffect` suppresses the smoke.
 - Reduce Transparency removes the soft shadow and keeps small shapes legible.
 - Increased Contrast strengthens the outline and internal marks.
-- The grayscale artwork is designed for both light and dark appearance.
+- The smoke uses the same palette in light and dark appearance. Classic, Snap,
+  and Drift stay grayscale; Bloom keeps its restrained pastel fills.
 - The transition removes the source view from hit testing and the accessibility
   tree as removal starts. Its drawing canvas is never interactive or exposed to
   accessibility.
@@ -222,7 +258,8 @@ the drawing field.
 Poof generates seeded glyph descriptors once at playback start. Each render
 selects one pose from absolute progress and draws it in one `Canvas`; there is
 no timer, per-frame random work, or SwiftUI view per glyph. Glyph count and
-field size stay bounded.
+field size stay bounded. Progressive removal prepares coverage only for the
+source's laid-out aspect ratio.
 
 ## Clean-room scope
 

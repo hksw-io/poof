@@ -27,11 +27,15 @@ later.
   reference dimension capped at 160 points unless measurements and tests
   justify a change.
 - Keep insertion quiet. The poof is a removal effect.
+- Progressive removal must keep the source intact through the dense poses,
+  carry covered pixels forward between pose swaps, and remove the source only
+  after the puffs cover its bounds.
 - Preserve the accessibility paths: Reduce Motion draws no spatial poses;
   Reduce Transparency removes the blurred shadow; Increased Contrast uses
   stronger outlines and detail marks.
-- Use the same grayscale artwork in light and dark appearance: white fills,
-  dark outlines, and neutral details.
+- Keep Classic, Snap, and Drift grayscale. Bloom may use stable pastel fills.
+  Use the same palette in light and dark appearance, with dark outlines and
+  neutral details.
 - Keep the drawing canvas hidden from accessibility and hit testing. A view
   being removed must not remain interactive or exposed to accessibility.
 - Do not call private APIs, extract system artwork, copy system sounds, or add
@@ -42,13 +46,15 @@ later.
 
 - `Sources/Poof/PoofConfiguration.swift`: public density, reach, padding, and
   playback seed settings.
+- `Sources/Poof/PoofStyle.swift`: public opt-in visual styles.
 - `Sources/Poof/PoofSimulation.swift`: pose selection, seeded breakup
   descriptors, and glyph variation.
-- `Sources/Poof/PoofEffect.swift`: grayscale vector paths and `Canvas`
+- `Sources/Poof/PoofEffect.swift`: vector paths, palette, and `Canvas`
   renderer.
 - `Sources/Poof/PoofTransition.swift`: public transition, 15 fps timing, and
   bounded overscan layout.
 - `Sources/PoofDemo`: interactive macOS sample.
+- `Tests/PoofDemoTests`: demo playback-mode tests.
 - `Tests/PoofTests`: simulation, layout, rendering, and transition tests.
 - `Tools/PoofMediaGenerator`: third-party-free generator for the assets in
   `Documentation/Media`, including its own pixel-stability tests.
