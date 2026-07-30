@@ -11,7 +11,7 @@
       WindowGroup {
         PoofDemoView()
       }
-      .defaultSize(width: 560, height: 480)
+      .defaultSize(width: 720, height: 660)
       .windowResizability(.contentSize)
     }
   }

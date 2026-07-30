@@ -22,6 +22,7 @@ let package = Package(
       dependencies: ["Poof"],
       resources: [.process("Resources")]
     ),
+    .testTarget(name: "PoofDemoTests", dependencies: ["PoofDemo"]),
     .testTarget(name: "PoofTests", dependencies: ["Poof"]),
   ],
   swiftLanguageModes: [.v6]
