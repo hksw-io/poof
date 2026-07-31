@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+### Changed
+
+- Draws classic smoke with puffs only. Every frame of the effect this package
+  recreates is built from bumpy multi-lobe puffs, so rings, curls, and flecks
+  now belong to Bloom and Snap, and size carries the dissipation instead.
+- Restores the measured second pose, reverting the compaction added in 1.1.0.
+  The original contracts in width and mass but is fractionally taller at the
+  second frame, and the rendering envelope now covers all five poses rather
+  than exempting that one.
+- Matches the measured ink weight: darker outlines and detail marks, and a
+  drop shadow that sits lower, spreads further, and reads as a shadow.
+  Increased Contrast moves further still so it remains a visible affordance.
+- Replaces tweened smooth motion with a continuous plume. Each puff now
+  follows its own trajectory rather than being interpolated between the five
+  authored poses, so the motion no longer reads as five phases blended.
+- Consumes the source under progressive removal instead of hiding it. Smoke
+  eats the view where it arrives, and a bite once taken is never given back.
+
+### Added
+
+- Adds `Animation.poof(motion:)` and `Animation.poof(duration:)`. Smooth
+  playback runs slightly longer by default, because continuous dissipation
+  reads as clipped at a third of a second. Bare `.poof` is unchanged.
+
+### Fixed
+
+- Fixes the measured size calibration and shape selection keying on the glyph
+  slot rather than the descriptor it was fitted against, which let the sparse
+  pose out-weigh the dense one at particle counts other than the default.
+- Stops `contentRemoval: .progressive` masking a view to its layout rect while
+  it is at rest, which clipped shadows, glows, and overflow for the view's
+  whole life on screen.
+- Keeps progressive smoke at the scale the cover reached instead of collapsing
+  it in a single frame at the third pose swap.
+- Keeps one playback seed across layout changes, so a resize no longer swaps
+  the poof for a different one mid-animation.
+- Prepares progressive playback off the main thread and roughly four times
+  faster, so a list of rows no longer serializes on it.
+- Fixes the media generator failing to resolve outside a directory named
+  `poof`, which broke `make check` for release tarballs.
+
 ## 1.1.0 - 2026-07-31
 
 ### Breaking changes

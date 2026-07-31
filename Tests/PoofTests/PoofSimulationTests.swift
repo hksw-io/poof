@@ -538,8 +538,8 @@ struct PoofSimulationTests {
     }
   }
 
-  @Test("The second pose is visibly more compact than dense puffs")
-  func compactSecondPose() {
+  @Test("The second pose sits between its neighbors")
+  func secondPoseSilhouette() {
     let configuration = PoofConfiguration(seed: 0x504F_4F46)
 
     for style in [PoofStyle.classic, .bloom, .snap] {
@@ -555,12 +555,34 @@ struct PoofSimulationTests {
         seed: 0x504F_4F46,
         style: style
       )
+      let cloud = glyphs(
+        for: .cloud,
+        in: configuration,
+        seed: 0x504F_4F46,
+        style: style
+      )
+      let cloudArea = descriptorBoundsArea(cloud)
       let clusterArea = descriptorBoundsArea(clusters)
       let puffArea = descriptorBoundsArea(puffs)
 
+      guard style == .classic else {
+        // The expressive styles keep a compact second pose as character.
+        #expect(
+          clusterArea < puffArea * 0.92,
+          "\(style): clusters \(clusterArea), puffs \(puffArea)"
+        )
+        continue
+      }
+
+      // The original contracts from the first frame onward, so classic's
+      // second pose belongs between its neighbors rather than under both.
       #expect(
-        clusterArea < puffArea * 0.92,
-        "\(style): clusters \(clusterArea), puffs \(puffArea)"
+        clusterArea <= cloudArea,
+        "classic: clusters \(clusterArea), cloud \(cloudArea)"
+      )
+      #expect(
+        clusterArea >= puffArea,
+        "classic: clusters \(clusterArea), puffs \(puffArea)"
       )
     }
   }
@@ -1108,13 +1130,69 @@ struct PoofSimulationTests {
 
   }
 
-  @Test("The sequence uses every organic contour")
+  @Test("Each style keeps to its own shape vocabulary")
+  func styleVocabularies() {
+    let expected: [PoofStyle: (Set<PoofContour>, Set<PoofPaint>)] = [
+      // Every frame of the original is bumpy multi-lobe puffs. Classic keeps
+      // to those and lets size carry the dissipation; rings, curls and flecks
+      // belong to the expressive styles.
+      .classic: ([.puff4, .puff5], [.fillAndOutline]),
+      .bloom: (
+        [.puff5, .ring, .curl],
+        [.fillAndOutline, .fillOutlineAndInset, .doubleStroke]
+      ),
+      .snap: (
+        [.puff4, .puff5, .fleck, .ring, .curl],
+        [.fillAndOutline, .doubleStroke]
+      ),
+    ]
+
+    for (style, allowed) in expected {
+      let configuration = PoofConfiguration(
+        particleCount: 64,
+        seed: 0x504F_4F46
+      )
+      var contours: Set<PoofContour> = []
+      var paints: Set<PoofPaint> = []
+
+      for pose in PoofPose.allCases {
+        for glyph in glyphs(
+          for: pose,
+          in: configuration,
+          seed: 0x504F_4F46,
+          style: style
+        ) {
+          contours.insert(glyph.contour)
+          paints.insert(glyph.paint)
+        }
+      }
+
+      #expect(contours.isSubset(of: allowed.0), "\(style): \(contours)")
+      #expect(paints.isSubset(of: allowed.1), "\(style): \(paints)")
+    }
+  }
+
+  @Test("The styles together use every organic contour")
   func contourCoverage() {
     let seed: UInt64 = 0x504F_4F46
-    let configuration = PoofConfiguration(seed: seed)
-    let allGlyphs: [PoofGlyph] = PoofPose.allCases.flatMap { pose in
-      glyphs(for: pose, in: configuration, seed: seed)
-    }
+    let configuration = PoofConfiguration(
+      particleCount: 64,
+      seed: seed
+    )
+    // Classic is puffs only, so the full vocabulary is reachable across the
+    // public styles rather than within any one of them. styleVocabularies
+    // pins which shapes belong to which.
+    let allGlyphs: [PoofGlyph] = [PoofStyle.classic, .bloom, .snap]
+      .flatMap { style in
+        PoofPose.allCases.flatMap { pose in
+          glyphs(
+            for: pose,
+            in: configuration,
+            seed: seed,
+            style: style
+          )
+        }
+      }
 
     #expect(
       Set(allGlyphs.map { $0.contour })

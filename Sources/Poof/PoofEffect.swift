@@ -352,9 +352,14 @@ private struct PreparedPoofCanvas: View {
       }
 
       if !reducesTransparency {
-        shadowContext.translateBy(x: 0, y: artSide * 0.018)
+        shadowContext.translateBy(
+          x: 0,
+          y: artSide * PoofArtwork.shadowOffsetRatio
+        )
         shadowContext.addFilter(
-          .blur(radius: max(0.35, artSide * 0.017))
+          .blur(
+            radius: max(0.35, artSide * PoofArtwork.shadowBlurRatio)
+          )
         )
       }
 
@@ -523,6 +528,27 @@ enum PoofArtwork {
   static let sourceCoverClusterFringeGrowth = 0.80
   static let sourceCoverBranchGrowth = 0.70
   static let sourceCoverMaximumOverhangRatio = 0.22
+
+  /// The originals put their shadow about 0.043 of the tile below the body,
+  /// fading over roughly 0.05 more. That extent does not fit here. The
+  /// original artwork runs off its own 128-point tile, while this one stays
+  /// inside the canvas it is given, and the measured silhouette already fills
+  /// about nine tenths of it; enlarging the shadow either clips the classic
+  /// artwork, whose positions are the measured ones and so are not pulled in,
+  /// or forces that artwork below the envelope it is fitted to. The extent
+  /// therefore stays as it was and the whole fidelity gain is taken in the
+  /// shadow's darkness, which costs no room at all.
+  static let shadowOffsetRatio = 0.018
+  static let shadowBlurRatio = 0.017
+  /// How far past its geometry a glyph actually paints, as a fraction of
+  /// `artSide`. The drawing limit is derived from this so the two cannot drift
+  /// apart the way a pair of hand-tuned constants would.
+  ///
+  /// A blurred shadow stays faintly visible well past its nominal radius, so
+  /// the blur is counted several times over rather than once; the constant is
+  /// the outline's half width.
+  static let inkOverreach =
+    shadowOffsetRatio + shadowBlurRatio * 2.4 + 0.014
 
   static func sourceCoverFillStrokeWidth(
     artSide: Double
@@ -1240,17 +1266,21 @@ struct PoofResolvedPalette: Sendable {
     light = Color(white: 1, opacity: 1)
     middle = Color(white: 0.95, opacity: 1)
     dark = Color(white: 0.86, opacity: 1)
+    // Measured from the original frames: outlines composite to 88...104 gray
+    // over white, and the drop shadow peaks near 0.37 with a soft falloff.
+    // Increased Contrast has to stay clearly darker than that, not merely
+    // darker than the old, much lighter defaults.
     outline = Color(
       white: 0,
-      opacity: hasIncreasedContrast ? 0.62 : 0.42
+      opacity: hasIncreasedContrast ? 0.78 : 0.60
     )
     detail = Color(
       white: 0,
-      opacity: hasIncreasedContrast ? 0.50 : 0.32
+      opacity: hasIncreasedContrast ? 0.64 : 0.46
     )
     shadow = Color(
       white: 0,
-      opacity: hasIncreasedContrast ? 0.30 : 0.22
+      opacity: hasIncreasedContrast ? 0.46 : 0.36
     )
     colors = palette.colors(for: style)
   }

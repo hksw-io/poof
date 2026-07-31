@@ -413,7 +413,8 @@ enum PoofSimulation {
         matchedReferenceGeometry(
           glyph,
           pose: pose,
-          index: descriptorIndex
+          index: descriptorIndex,
+          style: style
         ),
         pose: pose,
         index: descriptorIndex,
@@ -428,7 +429,7 @@ enum PoofSimulation {
       return variedGlyph
     }
 
-    return boundedModernGlyph(variedGlyph)
+    return boundedGlyph(variedGlyph, limit: drawingLimit(for: style))
   }
 
   private static func sourceCoverClusterGlyph(
@@ -464,9 +465,7 @@ enum PoofSimulation {
       seed: variationSeed
     )
 
-    return style == .classic
-      ? variedGlyph
-      : boundedModernGlyph(variedGlyph)
+    return boundedGlyph(variedGlyph, limit: drawingLimit(for: style))
   }
 
   // MARK: - Opening layouts
@@ -1169,68 +1168,13 @@ enum PoofSimulation {
     // Keyed on the descriptor index so a given measured descriptor keeps its
     // contour and paint whatever `particleCount` is in play.
     let index = descriptorIndex
-    let contour: PoofContour
-    let paint: PoofPaint
-
-    switch pose {
-    case .cloud:
-      contour = index.isMultiple(of: 2) ? .puff4 : .puff5
-      paint = .fillAndOutline
-    case .clusters:
-      contour =
-        [PoofContour.puff4, .puff5, .puff5, .puff4][
-          index % 4
-        ]
-      paint = .fillAndOutline
-    case .puffs:
-      switch index % 8 {
-      case 0, 1:
-        contour = .puff4
-        paint = .fillAndOutline
-      case 2, 3, 4:
-        contour = .puff5
-        paint = .fillAndOutline
-      case 5:
-        contour = .ring
-        paint = .fillOutlineAndInset
-      case 6:
-        contour = .curl
-        paint = .doubleStroke
-      default:
-        contour = .fleck
-        paint = .fillAndOutline
-      }
-    case .wisps:
-      switch index % 8 {
-      case 0, 1, 2:
-        contour = index.isMultiple(of: 2) ? .puff4 : .puff5
-        paint = .fillAndOutline
-      case 3, 4:
-        contour = .ring
-        paint = .fillOutlineAndInset
-      case 5:
-        contour = .curl
-        paint = .doubleStroke
-      default:
-        contour = .fleck
-        paint = .fillAndOutline
-      }
-    case .ringlets:
-      switch index % 8 {
-      case 3:
-        contour = .puff4
-        paint = .fillAndOutline
-      case 4:
-        contour = .ring
-        paint = .doubleStroke
-      case 5:
-        contour = .curl
-        paint = .doubleStroke
-      default:
-        contour = .fleck
-        paint = .fillAndOutline
-      }
-    }
+    // Every frame of the original is bumpy multi-lobe puffs: no rings, no
+    // polygons, no stroked squiggles. Classic smoke is puffs the whole way
+    // down and lets size carry the dissipation. The expressive styles below
+    // overwrite both of these, so this selection is classic's alone.
+    let contour: PoofContour =
+      descriptorIndex.isMultiple(of: 2) ? .puff4 : .puff5
+    let paint: PoofPaint = .fillAndOutline
 
     let classicGlyph = PoofGlyph(
       x: glyph.x,
@@ -1398,7 +1342,27 @@ enum PoofSimulation {
     }
   }
 
-  private static func boundedModernGlyph(_ glyph: PoofGlyph) -> PoofGlyph {
+  /// How far a glyph's center plus its extent may reach.
+  ///
+  /// Derived from the ink itself, so darkening or enlarging the shadow cannot
+  /// silently start clipping the artwork.
+  private static func drawingLimit(for style: PoofStyle) -> Double {
+    switch style {
+    case .classic:
+      // Classic's positions come from the measured descriptors and are
+      // calibrated against the originals; the bound below works on a rotated
+      // bounding box, which overstates a puff's reach enough to pull that
+      // calibration in. It is left alone.
+      .infinity
+    case .bloom, .snap:
+      0.5 - PoofArtwork.inkOverreach
+    }
+  }
+
+  private static func boundedGlyph(
+    _ glyph: PoofGlyph,
+    limit drawingLimit: Double
+  ) -> PoofGlyph {
     let renderedHeight =
       glyph.height * (glyph.contour == .curl ? 1.60 : 1)
     let cosine = abs(cos(glyph.rotation))
@@ -1407,8 +1371,6 @@ enum PoofSimulation {
     let halfHeight = renderedHeight / 2
     let extentX = halfWidth * cosine + halfHeight * sine
     let extentY = halfWidth * sine + halfHeight * cosine
-    // Reserve room for outlines and the optional blurred shadow.
-    let drawingLimit = 0.43
     let centerLimitX = max(0, drawingLimit - extentX)
     let centerLimitY = max(0, drawingLimit - extentY)
     let scaleX =
@@ -1433,7 +1395,8 @@ enum PoofSimulation {
   private static func matchedReferenceGeometry(
     _ glyph: PoofGlyph,
     pose: PoofPose,
-    index descriptorIndex: Int
+    index descriptorIndex: Int,
+    style: PoofStyle
   ) -> PoofGlyph {
     // Calibrate the authored vectors to the clean-room measurement envelopes
     // asserted by the rendering tests. `descriptorIndex` addresses the
@@ -1456,31 +1419,36 @@ enum PoofSimulation {
       offsetX = -0.010
       offsetY = -0.040
     case .clusters:
-      positionScaleX = 0.78
-      positionScaleY = 0.78
-      sizeScaleX = 0.86
-      sizeScaleY = 0.86
+      // Calibration runs before styling, so the expressive styles multiply
+      // whatever lands here. They were tuned against the compact second pose
+      // and keep it; restoring the measured one is classic's alone.
+      positionScaleX = style == .classic ? 1.035 : 0.78
+      positionScaleY = style == .classic ? 1.035 : 0.78
+      sizeScaleX = style == .classic ? 1.258 : 0.86
+      sizeScaleY = style == .classic ? 1.258 : 0.86
       offsetX = -0.005
       offsetY = 0.018
     case .puffs:
-      positionScaleX = 1.18
-      positionScaleY = 1.07
-      sizeScaleX = index < 11 ? 0.72 : 1.48
-      sizeScaleY = index < 11 ? 0.72 : 1.48
+      positionScaleX = 1.215
+      positionScaleY = 1.060
+      sizeScaleX = index < 11 ? 0.693 : 1.425
+      sizeScaleY = index < 11 ? 0.693 : 1.425
       offsetX = 0
       offsetY = -0.005
     case .wisps:
-      positionScaleX = 1.02
-      positionScaleY = 1.02
-      sizeScaleX = 1.48
-      sizeScaleY = 1.48
+      positionScaleX = 1.025
+      // The descriptor jitter is clamped to 0.58 before this scale applies,
+      // so anything above one here can push a glyph past the sanity bound.
+      positionScaleY = 1.000
+      sizeScaleX = 1.292
+      sizeScaleY = 1.292
       offsetX = -0.018
       offsetY = 0.008
     case .ringlets:
       positionScaleX = 1
       positionScaleY = 1
-      sizeScaleX = 1.38
-      sizeScaleY = 1.38
+      sizeScaleX = 1.196
+      sizeScaleY = 1.196
       offsetX = -0.010
       offsetY = -0.011
     }

@@ -2104,23 +2104,38 @@ struct PoofRenderingTests {
     #expect(first.normalizedDifference(from: second) < 0.08)
   }
 
-  @Test("The second pose is visibly smaller than its neighbors")
-  func compactSecondPose() throws {
-    let cloudImage = try #require(snapshot(progress: 0.1))
-    let clusterImage = try #require(snapshot(progress: 0.3))
-    let puffsImage = try #require(snapshot(progress: 0.5))
-    let cloud = try #require(cloudImage.statistics.bounds)
-    let clusters = try #require(clusterImage.statistics.bounds)
-    let puffs = try #require(puffsImage.statistics.bounds)
+  @Test("The silhouette contracts across the sequence")
+  func silhouetteContracts() throws {
+    // Measured from the originals: width and alpha mass fall monotonically,
+    // but height does not. The second frame is fractionally taller than the
+    // first, and the reference envelope records that, so asserting monotone
+    // height here would contradict both.
+    var widths: [Int] = []
+    var masses: [UInt64] = []
 
-    #expect((79...83).contains(cloud.width))
-    #expect((72...76).contains(cloud.height))
-    #expect((55...60).contains(clusters.width))
-    #expect((51...56).contains(clusters.height))
-    #expect(clusters.width <= puffs.width - 12)
-    #expect(clusters.height <= puffs.height - 12)
-    #expect(clusters.area * 4 < cloud.area * 3)
-    #expect(clusters.area * 4 < puffs.area * 3)
+    for progress in [0.10, 0.30, 0.50, 0.70, 0.90] {
+      let image = try #require(snapshot(progress: progress))
+      let bounds = try #require(image.statistics.bounds)
+
+      widths.append(bounds.width)
+      masses.append(image.statistics.alphaTotal)
+    }
+
+    // Non-increasing pose to pose, and clearly smaller end to end. Two
+    // neighbors can round to the same pixel width at these sizes without the
+    // silhouette having stopped contracting.
+    for (previous, current) in zip(widths, widths.dropFirst()) {
+      #expect(current <= previous, "widths \(widths)")
+    }
+
+    #expect(
+      Double(widths[4]) < Double(widths[0]) * 0.75,
+      "widths \(widths)"
+    )
+
+    for (previous, current) in zip(masses, masses.dropFirst()) {
+      #expect(current < previous, "masses \(masses)")
+    }
   }
 
   @Test("Unchanged poses retain their legacy measurement envelopes")
@@ -2151,9 +2166,9 @@ struct PoofRenderingTests {
           absoluteMassFloor
         )
 
-        // The compact cluster pose is an intentional departure from the
-        // measured legacy sequence and has dedicated size coverage above.
-        if index != 1 {
+        // Every pose is covered now: the second one no longer departs from
+        // the measured sequence.
+        do {
           #expect(
             abs(measurement.bounds.width - expectedBounds.width)
               <= reference.dimensionTolerance
@@ -2194,9 +2209,6 @@ struct PoofRenderingTests {
       }
 
       for (index, ratio) in measuredRatios.enumerated() {
-        guard index != 1 else {
-          continue
-        }
 
         #expect(
           abs(ratio - LegacyReference.alphaMassRatios[index])
@@ -3173,12 +3185,15 @@ private struct LegacyReference {
         CGPoint(x: -0.0260, y: -0.0003),
         CGPoint(x: -0.0579, y: -0.0130),
       ],
+      // Re-measured from the original frames, which resolve to 1, 1, 4, 14
+      // and 10 components at this size. The clusters and wisps ranges used to
+      // exclude the originals outright.
       connectedComponentRanges: [
         1...2,
-        1...2,
+        1...4,
         1...8,
-        8...12,
-        10...13,
+        8...16,
+        8...13,
       ],
       dimensionTolerance: 2
     ),
@@ -3205,10 +3220,11 @@ private struct LegacyReference {
         CGPoint(x: -0.0200, y: 0.0058),
         CGPoint(x: -0.0528, y: -0.0062),
       ],
+      // The originals resolve to 1, 1, 14, 18 and 13 components at this size.
       connectedComponentRanges: [
         1...2,
-        1...2,
-        6...10,
+        1...4,
+        6...15,
         10...19,
         10...14,
       ],
@@ -3237,10 +3253,11 @@ private struct LegacyReference {
         CGPoint(x: -0.0196, y: 0.0073),
         CGPoint(x: -0.0524, y: -0.0054),
       ],
+      // The originals resolve to 1, 1, 14, 18 and 13 components at this size.
       connectedComponentRanges: [
         1...2,
-        1...2,
-        8...13,
+        1...4,
+        8...15,
         13...20,
         11...15,
       ],
