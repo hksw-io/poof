@@ -1415,9 +1415,20 @@ struct PoofRenderingTests {
     }
   }
 
-  @Test("Smooth motion follows every authored pose envelope")
-  func smoothPoseAnchors() throws {
+  @Test("Smooth motion stays in the stepped field without copying it")
+  func smoothStaysInTheSteppedField() throws {
+    // Smooth used to be required to match stepped within a few points at each
+    // anchor, which is another way of saying it was the poses with a tween
+    // between them. It now has its own trajectories, so what has to hold is
+    // that it reads as the same effect: the same region, a comparable amount
+    // of ink, and a peak in the middle.
     for style in allPoofStyles {
+      var masses: [Double] = []
+      var steppedWidths: [Int] = []
+      var steppedHeights: [Int] = []
+      var smoothWidths: [Int] = []
+      var smoothHeights: [Int] = []
+
       for progress in [0.10, 0.30, 0.50, 0.70, 0.90] {
         let stepped = try #require(
           snapshot(progress: progress, style: style)
@@ -1429,29 +1440,31 @@ struct PoofRenderingTests {
             motion: .smooth
           )
         )
-        let steppedBounds = try #require(
-          stepped.statistics.bounds
-        )
-        let smoothBounds = try #require(
-          smooth.statistics.bounds
-        )
+        let steppedBounds = try #require(stepped.statistics.bounds)
+        let smoothBounds = try #require(smooth.statistics.bounds)
 
-        #expect(stepped.normalizedDifference(from: smooth) < 0.09)
-        #expect(abs(steppedBounds.width - smoothBounds.width) <= 6)
-        #expect(abs(steppedBounds.height - smoothBounds.height) <= 6)
-        #expect(
-          abs(
-            steppedBounds.minimumX + steppedBounds.maximumX
-              - smoothBounds.minimumX - smoothBounds.maximumX
-          ) <= 6
-        )
-        #expect(
-          abs(
-            steppedBounds.minimumY + steppedBounds.maximumY
-              - smoothBounds.minimumY - smoothBounds.maximumY
-          ) <= 6
-        )
+        steppedWidths.append(steppedBounds.width)
+        steppedHeights.append(steppedBounds.height)
+        smoothWidths.append(smoothBounds.width)
+        smoothHeights.append(smoothBounds.height)
+        masses.append(Double(smooth.statistics.alphaTotal))
       }
+
+      // Same field, compared at its widest. Pose by pose would just be the
+      // old requirement that smooth track the poses it no longer follows.
+      #expect(
+        (smoothWidths.max() ?? 0)
+          <= Int(Double(steppedWidths.max() ?? 0) * 1.15) + 4
+      )
+      #expect(
+        (smoothHeights.max() ?? 0)
+          <= Int(Double(steppedHeights.max() ?? 0) * 1.15) + 4
+      )
+
+      let peak = try #require(masses.indices.max { masses[$0] < masses[$1] })
+
+      #expect((1...3).contains(peak), "\(style) peaked at \(peak)")
+      #expect(masses[4] < masses[peak])
     }
   }
 

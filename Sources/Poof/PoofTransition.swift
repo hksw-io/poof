@@ -157,8 +157,31 @@ extension Transition where Self == PoofTransition {
 
 extension Animation {
   /// The timing curve tuned for ``PoofTransition``.
+  ///
+  /// This is the stepped sequence's own clock: five poses at fifteen frames a
+  /// second, one third of a second in total.
   public static var poof: Animation {
     .linear(duration: PoofSimulation.duration)
+  }
+
+  /// The timing curve tuned for a particular ``PoofMotion``.
+  ///
+  /// Stepped playback keeps the original third of a second. Smooth playback
+  /// runs a little longer, because continuous smoke spends its last moments
+  /// thinning out and a third of a second cuts that short.
+  public static func poof(motion: PoofMotion) -> Animation {
+    .linear(duration: PoofSimulation.duration(for: motion))
+  }
+
+  /// The poof timing curve over an explicit duration.
+  ///
+  /// The duration is clamped to `0.15...1.5` seconds.
+  public static func poof(duration: Double) -> Animation {
+    .linear(
+      duration: duration.isFinite
+        ? min(max(duration, 0.15), 1.5)
+        : PoofSimulation.duration
+    )
   }
 }
 

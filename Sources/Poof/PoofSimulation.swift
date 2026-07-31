@@ -85,723 +85,6 @@ struct PoofGlyphBlend: Equatable, Sendable {
   }
 }
 
-struct PoofSmoothGeometry: Equatable, Sendable {
-  let x: Double
-  let y: Double
-  let width: Double
-  let height: Double
-  let rotation: Double
-
-  static let zero = PoofSmoothGeometry(
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
-    rotation: 0
-  )
-
-  init(glyph: PoofGlyph) {
-    x = glyph.x
-    y = glyph.y
-    width = glyph.width
-    height = glyph.height
-    rotation = glyph.rotation
-  }
-
-  init(
-    x: Double,
-    y: Double,
-    width: Double,
-    height: Double,
-    rotation: Double
-  ) {
-    self.x = x
-    self.y = y
-    self.width = width
-    self.height = height
-    self.rotation = rotation
-  }
-
-  func replacing(
-    x: Double? = nil,
-    y: Double? = nil,
-    rotation: Double? = nil
-  ) -> PoofSmoothGeometry {
-    PoofSmoothGeometry(
-      x: x ?? self.x,
-      y: y ?? self.y,
-      width: width,
-      height: height,
-      rotation: rotation ?? self.rotation
-    )
-  }
-
-  static func tangent(
-    previous: PoofSmoothGeometry,
-    next: PoofSmoothGeometry,
-    duration: Double
-  ) -> PoofSmoothGeometry {
-    PoofSmoothGeometry(
-      x: (next.x - previous.x) / duration,
-      y: (next.y - previous.y) / duration,
-      width: (next.width - previous.width) / duration,
-      height: (next.height - previous.height) / duration,
-      rotation: (next.rotation - previous.rotation) / duration
-    )
-  }
-
-  static func hermite(
-    start: PoofSmoothGeometry,
-    end: PoofSmoothGeometry,
-    startTangent: PoofSmoothGeometry,
-    endTangent: PoofSmoothGeometry,
-    amount: Double,
-    duration: Double
-  ) -> PoofSmoothGeometry {
-    let amountSquared = amount * amount
-    let amountCubed = amountSquared * amount
-    let startWeight = 2 * amountCubed - 3 * amountSquared + 1
-    let startTangentWeight = amountCubed - 2 * amountSquared + amount
-    let endWeight = -2 * amountCubed + 3 * amountSquared
-    let endTangentWeight = amountCubed - amountSquared
-
-    func value(
-      _ start: Double,
-      _ end: Double,
-      _ startTangent: Double,
-      _ endTangent: Double
-    ) -> Double {
-      startWeight * start
-        + startTangentWeight * duration * startTangent
-        + endWeight * end
-        + endTangentWeight * duration * endTangent
-    }
-
-    return PoofSmoothGeometry(
-      x: value(start.x, end.x, startTangent.x, endTangent.x),
-      y: value(start.y, end.y, startTangent.y, endTangent.y),
-      width: value(
-        start.width,
-        end.width,
-        startTangent.width,
-        endTangent.width
-      ),
-      height: value(
-        start.height,
-        end.height,
-        startTangent.height,
-        endTangent.height
-      ),
-      rotation: value(
-        start.rotation,
-        end.rotation,
-        startTangent.rotation,
-        endTangent.rotation
-      )
-    )
-  }
-}
-
-struct PoofSmoothTrackState: Equatable, Sendable {
-  let glyph: PoofGlyph
-  let paletteIndex: Int
-  let scale: Double
-}
-
-struct PoofSmoothLifecycle: Equatable, Sendable {
-  let start: Double
-  let duration: Double
-}
-
-struct PoofSmoothTrack: Equatable, Sendable {
-  let contour: PoofContour
-  let paint: PoofPaint
-  let tone: PoofTone
-  let opacity: Double
-  let paletteIndex: Int
-  let anchors: [PoofSmoothGeometry]
-  let tangents: [PoofSmoothGeometry]
-  let activity: [Double]
-  let lifecycles: [PoofSmoothLifecycle]
-
-  func state(for sample: PoofPoseSample) -> PoofSmoothTrackState {
-    let segment = min(
-      max(sample.segment, 0),
-      anchors.count - 2
-    )
-    let amount = min(max(sample.amount, 0), 1)
-    let duration =
-      PoofSmoothPlan.anchorProgress[segment + 1]
-      - PoofSmoothPlan.anchorProgress[segment]
-    let geometry = PoofSmoothGeometry.hermite(
-      start: anchors[segment],
-      end: anchors[segment + 1],
-      startTangent: tangents[segment],
-      endTangent: tangents[segment + 1],
-      amount: amount,
-      duration: duration
-    )
-    let scale = interpolatedActivity(
-      start: activity[segment],
-      end: activity[segment + 1],
-      amount: amount,
-      lifecycle: lifecycles[segment]
-    )
-
-    return PoofSmoothTrackState(
-      glyph: PoofGlyph(
-        x: geometry.x,
-        y: geometry.y,
-        width: max(geometry.width, 0) * scale,
-        height: max(geometry.height, 0) * scale,
-        opacity: opacity,
-        contour: contour,
-        paint: paint,
-        rotation: geometry.rotation,
-        tone: tone
-      ),
-      paletteIndex: paletteIndex,
-      scale: scale
-    )
-  }
-
-  private func interpolatedActivity(
-    start: Double,
-    end: Double,
-    amount: Double,
-    lifecycle: PoofSmoothLifecycle
-  ) -> Double {
-    guard start != end else {
-      return start
-    }
-
-    let lifecycleAmount = min(
-      max(
-        (amount - lifecycle.start) / lifecycle.duration,
-        0
-      ),
-      1
-    )
-    let amountCubed =
-      lifecycleAmount * lifecycleAmount * lifecycleAmount
-    let smootherAmount =
-      amountCubed
-      * (lifecycleAmount
-        * (lifecycleAmount * 6 - 15)
-        + 10)
-    return start + (end - start) * smootherAmount
-  }
-}
-
-struct PoofSmoothPlan: Equatable, Sendable {
-  // Empty endpoints let puffs grow into and shrink out of the playback.
-  static let anchorProgress = [
-    0.0,
-    0.1,
-    0.3,
-    0.5,
-    0.7,
-    0.9,
-    1.0,
-  ]
-  static let visibleScaleThreshold = 0.000_001
-
-  let tracks: [PoofSmoothTrack]
-
-  init(
-    poseAnchors: [[PoofGlyphLayer]],
-    variationSeed: UInt64,
-    preservingLineageThrough fixedPoseIndex: Int? = nil
-  ) {
-    let builders = Self.trackBuilders(
-      poseAnchors: poseAnchors,
-      preservingLineageThrough: fixedPoseIndex
-    )
-    let visibleLayersByAnchor =
-      builders.first.map { firstBuilder in
-        firstBuilder.layers.indices.map { anchorIndex in
-          builders.compactMap {
-            $0.layers[anchorIndex]
-          }
-        }
-      } ?? []
-    let lifecycles = Self.lifecycles(
-      for: builders,
-      seed: variationSeed
-    )
-
-    tracks = builders.enumerated().compactMap {
-      trackIndex,
-      builder in
-      guard
-        let firstLayer = builder.layers.compactMap({ $0 }).first
-      else {
-        return nil
-      }
-
-      let resolvedAnchors = Self.resolvedAnchors(
-        for: builder,
-        visibleLayersByAnchor: visibleLayersByAnchor
-      )
-      let unwrappedAnchors = Self.unwrappedRotations(
-        in: resolvedAnchors
-      )
-      return PoofSmoothTrack(
-        contour: firstLayer.glyph.contour,
-        paint: firstLayer.glyph.paint,
-        tone: firstLayer.glyph.tone,
-        opacity: firstLayer.glyph.opacity,
-        paletteIndex: firstLayer.paletteIndex,
-        anchors: unwrappedAnchors,
-        tangents: Self.tangents(for: unwrappedAnchors),
-        activity: builder.layers.map {
-          $0 == nil ? 0 : 1
-        },
-        lifecycles: lifecycles[trackIndex]
-      )
-    }
-  }
-
-  func states(for sample: PoofPoseSample) -> [PoofSmoothTrackState] {
-    tracks.map {
-      $0.state(for: sample)
-    }
-  }
-
-  func glyphs(for sample: PoofPoseSample) -> [PoofGlyph] {
-    states(for: sample).compactMap { state in
-      state.scale > Self.visibleScaleThreshold
-        ? state.glyph
-        : nil
-    }
-  }
-
-  func blends(for sample: PoofPoseSample) -> [PoofGlyphBlend] {
-    states(for: sample).compactMap { state in
-      guard state.scale > Self.visibleScaleThreshold else {
-        return nil
-      }
-
-      return .single(
-        state.glyph,
-        paletteIndex: state.paletteIndex,
-        scale: state.scale
-      )
-    }
-  }
-
-  private struct TrackBuilder {
-    var layers: [PoofGlyphLayer?]
-    var lastLayer: PoofGlyphLayer
-  }
-
-  private struct Match {
-    let distance: Double
-    let trackIndex: Int
-    let layerIndex: Int
-  }
-
-  private static func trackBuilders(
-    poseAnchors: [[PoofGlyphLayer]],
-    preservingLineageThrough fixedPoseIndex: Int?
-  ) -> [TrackBuilder] {
-    var builders: [TrackBuilder] = []
-
-    for (poseIndex, anchor) in poseAnchors.enumerated() {
-      let anchorIndex = poseIndex + 1
-
-      for index in builders.indices {
-        builders[index].layers.append(nil)
-      }
-
-      if let fixedPoseIndex, poseIndex <= fixedPoseIndex {
-        assignByLineage(
-          anchor,
-          at: anchorIndex,
-          builders: &builders
-        )
-      } else {
-        assignSpatially(
-          anchor,
-          at: anchorIndex,
-          builders: &builders
-        )
-      }
-    }
-
-    for index in builders.indices {
-      builders[index].layers.append(nil)
-    }
-
-    return builders
-  }
-
-  private static func assignByLineage(
-    _ anchor: [PoofGlyphLayer],
-    at anchorIndex: Int,
-    builders: inout [TrackBuilder]
-  ) {
-    for (layerIndex, layer) in anchor.enumerated() {
-      if builders.indices.contains(layerIndex) {
-        builders[layerIndex].layers[anchorIndex] = layer
-        builders[layerIndex].lastLayer = layer
-      } else {
-        builders.append(
-          TrackBuilder(
-            layers:
-              Array(
-                repeating: nil,
-                count: anchorIndex
-              ) + [layer],
-            lastLayer: layer
-          )
-        )
-      }
-    }
-  }
-
-  private static func assignSpatially(
-    _ anchor: [PoofGlyphLayer],
-    at anchorIndex: Int,
-    builders: inout [TrackBuilder]
-  ) {
-    var remainingLayerIndices = Set(anchor.indices)
-    // Continue visible tracks before recycling dormant ones. This keeps a
-    // puff's path stable when the authored pose changes its glyph count.
-    let activeTrackIndices = builders.indices.filter {
-      builders[$0].layers[anchorIndex - 1] != nil
-    }
-
-    assignMatches(
-      trackIndices: activeTrackIndices,
-      anchor: anchor,
-      anchorIndex: anchorIndex,
-      remainingLayerIndices: &remainingLayerIndices,
-      builders: &builders
-    )
-
-    let inactiveTrackIndices = builders.indices.filter {
-      builders[$0].layers[anchorIndex] == nil
-    }
-    assignMatches(
-      trackIndices: inactiveTrackIndices,
-      anchor: anchor,
-      anchorIndex: anchorIndex,
-      remainingLayerIndices: &remainingLayerIndices,
-      builders: &builders
-    )
-
-    for layerIndex in anchor.indices
-    where remainingLayerIndices.contains(layerIndex) {
-      let layer = anchor[layerIndex]
-      builders.append(
-        TrackBuilder(
-          layers:
-            Array(
-              repeating: nil,
-              count: anchorIndex
-            ) + [layer],
-          lastLayer: layer
-        )
-      )
-    }
-  }
-
-  private static func assignMatches(
-    trackIndices: [Int],
-    anchor: [PoofGlyphLayer],
-    anchorIndex: Int,
-    remainingLayerIndices: inout Set<Int>,
-    builders: inout [TrackBuilder]
-  ) {
-    guard
-      !trackIndices.isEmpty,
-      !remainingLayerIndices.isEmpty
-    else {
-      return
-    }
-
-    let matches = trackIndices.flatMap { trackIndex in
-      remainingLayerIndices.map { layerIndex in
-        Match(
-          distance: squaredDistance(
-            from: builders[trackIndex].lastLayer.glyph,
-            to: anchor[layerIndex].glyph
-          ),
-          trackIndex: trackIndex,
-          layerIndex: layerIndex
-        )
-      }
-    }.sorted {
-      if $0.distance != $1.distance {
-        return $0.distance < $1.distance
-      }
-      if $0.trackIndex != $1.trackIndex {
-        return $0.trackIndex < $1.trackIndex
-      }
-      return $0.layerIndex < $1.layerIndex
-    }
-    var matchedTrackIndices: Set<Int> = []
-
-    for match in matches
-    where !matchedTrackIndices.contains(match.trackIndex)
-      && remainingLayerIndices.contains(match.layerIndex)
-    {
-      let layer = anchor[match.layerIndex]
-      builders[match.trackIndex].layers[anchorIndex] = layer
-      builders[match.trackIndex].lastLayer = layer
-      matchedTrackIndices.insert(match.trackIndex)
-      remainingLayerIndices.remove(match.layerIndex)
-    }
-  }
-
-  private static func resolvedAnchors(
-    for builder: TrackBuilder,
-    visibleLayersByAnchor: [[PoofGlyphLayer]]
-  ) -> [PoofSmoothGeometry] {
-    builder.layers.indices.map { anchorIndex in
-      if let layer = builder.layers[anchorIndex] {
-        return PoofSmoothGeometry(glyph: layer.glyph)
-      }
-
-      let previousLayer = builder.layers[..<anchorIndex]
-        .reversed()
-        .compactMap { $0 }
-        .first
-      let nextLayer = builder.layers[(anchorIndex + 1)...]
-        .compactMap { $0 }
-        .first
-      let referenceLayer = previousLayer ?? nextLayer
-
-      guard let referenceLayer else {
-        return .zero
-      }
-
-      // A track begins at the center and ends at its last visible position.
-      if anchorIndex == 0 {
-        return PoofSmoothGeometry(glyph: referenceLayer.glyph)
-          .replacing(x: 0, y: 0)
-      }
-
-      guard
-        let targetLayer = nearestLayer(
-          to: referenceLayer.glyph,
-          in: visibleLayersByAnchor[anchorIndex]
-        )
-      else {
-        return PoofSmoothGeometry(glyph: referenceLayer.glyph)
-      }
-
-      // Dormant tracks collapse into nearby smoke instead of jumping across
-      // the field before they scale back in.
-      return PoofSmoothGeometry(glyph: referenceLayer.glyph)
-        .replacing(
-          x: targetLayer.glyph.x,
-          y: targetLayer.glyph.y,
-          rotation: targetLayer.glyph.rotation
-        )
-    }
-  }
-
-  private static func nearestLayer(
-    to glyph: PoofGlyph,
-    in candidates: [PoofGlyphLayer]
-  ) -> PoofGlyphLayer? {
-    candidates.min {
-      let firstDistance = squaredDistance(
-        from: glyph,
-        to: $0.glyph
-      )
-      let secondDistance = squaredDistance(
-        from: glyph,
-        to: $1.glyph
-      )
-      return firstDistance < secondDistance
-    }
-  }
-
-  private static func squaredDistance(
-    from start: PoofGlyph,
-    to end: PoofGlyph
-  ) -> Double {
-    let deltaX = end.x - start.x
-    let deltaY = end.y - start.y
-    return deltaX * deltaX + deltaY * deltaY
-  }
-
-  private static func unwrappedRotations(
-    in anchors: [PoofSmoothGeometry]
-  ) -> [PoofSmoothGeometry] {
-    guard let first = anchors.first else {
-      return []
-    }
-
-    var result = [first]
-
-    for anchor in anchors.dropFirst() {
-      let previousRotation = result[result.count - 1].rotation
-      let delta = atan2(
-        sin(anchor.rotation - previousRotation),
-        cos(anchor.rotation - previousRotation)
-      )
-      result.append(
-        anchor.replacing(
-          rotation: previousRotation + delta
-        )
-      )
-    }
-
-    return result
-  }
-
-  private static func tangents(
-    for anchors: [PoofSmoothGeometry]
-  ) -> [PoofSmoothGeometry] {
-    anchors.indices.map { index in
-      guard index > 0, index < anchors.count - 1 else {
-        return .zero
-      }
-
-      // One shared central tangent gives both sides of an anchor the same
-      // velocity. The empty endpoints remain at rest.
-      return .tangent(
-        previous: anchors[index - 1],
-        next: anchors[index + 1],
-        duration:
-          anchorProgress[index + 1]
-          - anchorProgress[index - 1]
-      )
-    }
-  }
-
-  private static func lifecycles(
-    for builders: [TrackBuilder],
-    seed: UInt64
-  ) -> [[PoofSmoothLifecycle]] {
-    guard let anchorCount = builders.first?.layers.count else {
-      return []
-    }
-
-    let segmentCount = anchorCount - 1
-    let idle = PoofSmoothLifecycle(start: 0, duration: 1)
-    var result = builders.map { _ in
-      Array(repeating: idle, count: segmentCount)
-    }
-
-    for segment in 0..<segmentCount {
-      // Sort each lifecycle event once, then place it in a jittered timing
-      // stratum. Randomness can change the order without creating batches.
-      let changingTracks = builders.indices.compactMap {
-        trackIndex
-          -> (index: Int, order: UInt64)? in
-        guard
-          (builders[trackIndex].layers[segment] == nil)
-            != (builders[trackIndex].layers[segment + 1] == nil)
-        else {
-          return nil
-        }
-
-        return (
-          trackIndex,
-          lifecycleOrder(
-            seed: seed,
-            trackIndex: trackIndex,
-            segment: segment
-          )
-        )
-      }.sorted {
-        $0.order == $1.order
-          ? $0.index < $1.index
-          : $0.order < $1.order
-      }
-      let count = Double(changingTracks.count)
-
-      for (rank, track) in changingTracks.enumerated() {
-        let trackIndex = track.index
-        let jitter =
-          (unitNoise(
-            seed: lifecycleKey(
-              seed: seed,
-              trackIndex: trackIndex,
-              segment: segment,
-              salt: 0xA076_1D64_78BD_642F
-            )
-          ) - 0.5) * 0.5
-        let phase =
-          (Double(rank) + 0.5 + jitter) / count
-        let duration =
-          0.16
-          + unitNoise(
-            seed: lifecycleKey(
-              seed: seed,
-              trackIndex: trackIndex,
-              segment: segment,
-              salt: 0xE703_7ED1_A0B4_28DB
-            )
-          ) * 0.06
-        result[trackIndex][segment] = PoofSmoothLifecycle(
-          start: 0.02 + phase * 0.74,
-          duration: duration
-        )
-      }
-    }
-
-    return result
-  }
-
-  private static func lifecycleOrder(
-    seed: UInt64,
-    trackIndex: Int,
-    segment: Int
-  ) -> UInt64 {
-    mixedValue(
-      seed: lifecycleKey(
-        seed: seed,
-        trackIndex: trackIndex,
-        segment: segment,
-        salt: 0x8EBC_6AF0_9C88_C6E3
-      )
-    )
-  }
-
-  private static func lifecycleKey(
-    seed: UInt64,
-    trackIndex: Int,
-    segment: Int,
-    salt: UInt64
-  ) -> UInt64 {
-    seed
-      ^ (UInt64(trackIndex + 1) &* 0xD6E8_FEB8_6659_FD93)
-      ^ (UInt64(segment + 1) &* 0x9E37_79B9_7F4A_7C15)
-      ^ salt
-  }
-
-  private static func unitNoise(seed: UInt64) -> Double {
-    Double(mixedValue(seed: seed) >> 11) * 0x1.0p-53
-  }
-
-  private static func mixedValue(seed: UInt64) -> UInt64 {
-    var value = seed &+ 0x9E37_79B9_7F4A_7C15
-    value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
-    value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
-    value ^= value >> 31
-    return value
-  }
-}
-
-struct PoofPoseSample: Equatable, Sendable {
-  let segment: Int
-  let start: PoofPose?
-  let end: PoofPose?
-  let amount: Double
-
-  func weight(for pose: PoofPose) -> Double {
-    let startWeight = start == pose ? 1 - amount : 0
-    let endWeight = end == pose ? amount : 0
-    return startWeight + endWeight
-  }
-}
-
 enum PoofSourceCoverAspect: CaseIterable, Hashable, Sendable {
   case square
   case wide
@@ -872,7 +155,7 @@ struct PoofFrameSet: Sendable {
   let style: PoofStyle
   let variationSeed: UInt64
   private let poses: [[PoofGlyph]]
-  private let smoothPlan: PoofSmoothPlan
+  private let plume: PoofPlume
   private let sourceCoverLayout: PoofSourceCoverLayout?
   let sourceCoverAspect: PoofSourceCoverAspect?
 
@@ -892,15 +175,13 @@ struct PoofFrameSet: Sendable {
     self.style = style
     self.variationSeed = variationSeed
     self.poses = poses
-    smoothPlan = PoofSmoothPlan(
-      poseAnchors: poses.map { pose in
-        pose.enumerated().map {
-          PoofGlyphLayer(
-            glyph: $0.element,
-            paletteIndex: $0.offset
-          )
-        }
-      },
+    // The authored poses seed where puffs start and how big they begin; the
+    // motion between them belongs to the plume, not to a tween.
+    plume = PoofPlume.make(
+      configuration: configuration,
+      style: style,
+      profile: sourceCoverLayout == nil ? .standalone : .progressive,
+      origins: PoofPlume.origins(from: poses),
       variationSeed: variationSeed
     )
     self.sourceCoverLayout = sourceCoverLayout
@@ -911,12 +192,13 @@ struct PoofFrameSet: Sendable {
     poses[pose.rawValue]
   }
 
-  func glyphs(for sample: PoofPoseSample) -> [PoofGlyph] {
-    smoothPlan.glyphs(for: sample)
+  /// The smoke alive at this progress under smooth motion.
+  func blends(at progress: Double) -> [PoofGlyphBlend] {
+    plume.blends(at: progress)
   }
 
-  func blends(for sample: PoofPoseSample) -> [PoofGlyphBlend] {
-    smoothPlan.blends(for: sample)
+  var plumeEngulfProgress: Double {
+    plume.engulfProgress
   }
 
   /// The glyphs generated for an aspect, with no substitution.
@@ -957,6 +239,17 @@ struct PoofFrameSet: Sendable {
 enum PoofSimulation {
   static let frameDuration = 1.0 / 15.0
   static let duration = frameDuration * Double(PoofPose.allCases.count)
+  /// Continuous smoke needs a moment longer to finish thinning out.
+  static let smoothDuration = 0.45
+
+  static func duration(for motion: PoofMotion) -> Double {
+    switch motion {
+    case .stepped:
+      duration
+    case .smooth:
+      smoothDuration
+    }
+  }
 
   private static let referenceSpread = 0.82
   // Stable index angles keep each Snap glyph on one ray across breakup poses.
@@ -1055,36 +348,6 @@ enum PoofSimulation {
       PoofPose.allCases.count - 1
     )
     return PoofPose(rawValue: index)
-  }
-
-  static func smoothSample(for progress: Double) -> PoofPoseSample? {
-    let progress = normalized(progress)
-
-    guard progress > 0, progress < 1 else {
-      return nil
-    }
-
-    let anchors = zip(
-      PoofSmoothPlan.anchorProgress,
-      [nil, .cloud, .clusters, .puffs, .wisps, .ringlets, nil]
-        as [PoofPose?]
-    ).map { (progress: $0, pose: $1) }
-    let segment =
-      anchors.indices.dropLast().first { index in
-        progress <= anchors[index + 1].progress
-      } ?? anchors.count - 2
-    let start = anchors[segment]
-    let end = anchors[segment + 1]
-    let linearAmount =
-      (progress - start.progress)
-      / (end.progress - start.progress)
-
-    return PoofPoseSample(
-      segment: segment,
-      start: start.pose,
-      end: end.pose,
-      amount: linearAmount
-    )
   }
 
   static func glyphCount(
@@ -3109,9 +2372,7 @@ enum PoofSimulation {
     key: UInt64,
     in range: ClosedRange<Double>
   ) -> Double {
-    let unit = (noise(seed: seed, key: key) + 1) / 2
-    return range.lowerBound
-      + (range.upperBound - range.lowerBound) * unit
+    PoofNoise.value(seed: seed, key: key, in: range)
   }
 
   private static func sourceCoverGeometrySeed(
@@ -3183,12 +2444,7 @@ enum PoofSimulation {
   }
 
   private static func noise(seed: UInt64, key: UInt64) -> Double {
-    // Counter-based noise stays deterministic without mutable random state.
-    var random = SplitMix64(
-      seed: seed
-        ^ (key &* 0xD6E8_FEB8_6659_FD93)
-    )
-    return random.value(in: -1...1)
+    PoofNoise.value(seed: seed, key: key)
   }
 
   private static func normalized(_ value: Double) -> Double {
@@ -3201,28 +2457,5 @@ enum PoofSimulation {
     }
 
     return min(max(value, 0), 1)
-  }
-}
-
-private struct SplitMix64 {
-  private var state: UInt64
-
-  init(seed: UInt64) {
-    state = seed
-  }
-
-  mutating func value(in range: ClosedRange<Double>) -> Double {
-    let upperBits = next() >> 11
-    let unit = Double(upperBits) * 0x1.0p-53
-    return range.lowerBound
-      + (range.upperBound - range.lowerBound) * unit
-  }
-
-  private mutating func next() -> UInt64 {
-    state &+= 0x9E37_79B9_7F4A_7C15
-    var value = state
-    value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
-    value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
-    return value ^ (value >> 31)
   }
 }

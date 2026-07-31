@@ -6,6 +6,29 @@ import Testing
 @MainActor
 @Suite("Poof transition")
 struct PoofTransitionTests {
+  @Test("Poof timing is stepped by default and opt-in for smooth")
+  func poofAnimationTiming() {
+    #expect(Animation.poof == .linear(duration: PoofSimulation.duration))
+    #expect(
+      Animation.poof(motion: .stepped)
+        == .linear(duration: PoofSimulation.duration)
+    )
+    #expect(
+      Animation.poof(motion: .smooth)
+        == .linear(duration: PoofSimulation.smoothDuration)
+    )
+    #expect(Animation.poof(duration: 0.5) == .linear(duration: 0.5))
+    // Clamped, so a stray value cannot stall or blink the effect.
+    #expect(Animation.poof(duration: 0) == .linear(duration: 0.15))
+    #expect(Animation.poof(duration: 99) == .linear(duration: 1.5))
+    #expect(
+      Animation.poof(duration: .nan)
+        == .linear(duration: PoofSimulation.duration)
+    )
+    // The stepped clock is the recreation's own and must not have moved.
+    #expect(PoofSimulation.duration == 1.0 / 3.0)
+  }
+
   @Test("A playback keeps one seed across rebuilds")
   func playbackSeedSurvivesRebuilds() {
     var rolls = 0

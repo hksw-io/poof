@@ -161,51 +161,6 @@ struct PoofPlaybackInput: Equatable, Sendable {
   let sourceCoverAspect: PoofSourceCoverAspect?
 }
 
-private struct PoofProgressiveTweenInput: Equatable {
-  let sourceSize: CGSize
-  let artSide: Double
-  let frameSet: PoofFrameSet
-
-  static func == (
-    lhs: PoofProgressiveTweenInput,
-    rhs: PoofProgressiveTweenInput
-  ) -> Bool {
-    lhs.sourceSize == rhs.sourceSize
-      && lhs.artSide == rhs.artSide
-      && lhs.frameSet.configuration == rhs.frameSet.configuration
-      && lhs.frameSet.style == rhs.frameSet.style
-      && lhs.frameSet.variationSeed == rhs.frameSet.variationSeed
-      && lhs.frameSet.sourceCoverAspect
-        == rhs.frameSet.sourceCoverAspect
-  }
-}
-
-private struct PoofProgressiveTweenPlan: Sendable {
-  private let plan: PoofSmoothPlan
-
-  init(input: PoofProgressiveTweenInput) {
-    let rect = CGRect(origin: .zero, size: input.sourceSize)
-    let poseAnchors = PoofPose.allCases.map {
-      PoofArtwork.progressiveGlyphs(
-        for: $0,
-        in: rect,
-        artSide: input.artSide,
-        frameSet: input.frameSet
-      )
-    }
-    plan = PoofSmoothPlan(
-      poseAnchors: poseAnchors,
-      variationSeed: input.frameSet.variationSeed,
-      // Keep source-cover lineage intact, then spatially track breakup.
-      preservingLineageThrough: PoofPose.puffs.rawValue
-    )
-  }
-
-  func blends(for sample: PoofPoseSample) -> [PoofGlyphBlend] {
-    plan.blends(for: sample)
-  }
-}
-
 @Animatable
 struct PoofCanvas: View {
   var progress: Double
@@ -237,9 +192,6 @@ struct PoofCanvas: View {
 }
 
 private struct PreparedPoofCanvas: View {
-  @State private var progressiveTweenInput: PoofProgressiveTweenInput?
-  @State private var progressiveTweenPlan: PoofProgressiveTweenPlan?
-
   let progress: Double
   let palette: PoofResolvedPalette
   let motion: PoofMotion
@@ -252,57 +204,23 @@ private struct PreparedPoofCanvas: View {
   let sourceSize: CGSize?
 
   var body: some View {
-    let sample =
-      motion == .smooth
-      ? PoofSimulation.smoothSample(for: progress)
-      : nil
+    let isSmooth = motion == .smooth
     let pose =
-      sample == nil
-      ? PoofSimulation.pose(for: progress)
-      : nil
-    let newProgressiveTweenInput: PoofProgressiveTweenInput? =
-      if motion == .smooth,
-        occludesSource,
-        let sourceSize,
-        let referenceArtSide,
-        let frameSet
-      {
-        PoofProgressiveTweenInput(
-          sourceSize: sourceSize,
-          artSide: referenceArtSide,
-          frameSet: frameSet
-        )
-      } else {
-        nil
-      }
-    let resolvedProgressiveTweenPlan: PoofProgressiveTweenPlan? =
-      if newProgressiveTweenInput == progressiveTweenInput {
-        progressiveTweenPlan
-      } else {
-        newProgressiveTweenInput.map(
-          PoofProgressiveTweenPlan.init(input:)
-        )
-      }
-    // Resolve interpolation before Canvas drawing so its callback only turns
+      isSmooth
+      ? nil
+      : PoofSimulation.pose(for: progress)
+    // Resolve the plume before Canvas drawing so its callback only turns
     // bounded, deterministic descriptors into paths.
     let smoothGlyphBlends: [PoofGlyphBlend]? =
-      if let sample, let frameSet {
-        if let resolvedProgressiveTweenPlan {
-          resolvedProgressiveTweenPlan.blends(for: sample)
-        } else {
-          PoofArtwork.renderedGlyphBlends(
-            for: sample,
-            occludesSource: occludesSource,
-            frameSet: frameSet
-          )
-        }
+      if isSmooth, let frameSet {
+        frameSet.blends(at: progress)
       } else {
         nil
       }
     // Stepped progressive playback hands the breakup poses on at the scale the
     // cover reached, resolved here so the Canvas callback only draws.
     let progressiveBreakupBlends: [PoofGlyphBlend]? =
-      if sample == nil,
+      if !isSmooth,
         occludesSource,
         let pose,
         let frameSet,
@@ -333,7 +251,7 @@ private struct PreparedPoofCanvas: View {
         return
       }
 
-      guard sample != nil || pose != nil else {
+      guard isSmooth || pose != nil else {
         return
       }
 
@@ -360,23 +278,13 @@ private struct PreparedPoofCanvas: View {
           height: sourceSize.height
         )
       }
-      let usesSmoothProgressive =
-        sample != nil
-        && occludesSource
-        && sourceRect != nil
-      let smoothCoverScale =
-        if usesSmoothProgressive, let sample {
-          sourceCoverScale(for: sample)
-        } else {
-          0.0
-        }
       let coverOutlineWidth = max(0.4, outlineWidth * 0.72)
       let coverFillStrokeWidth =
         PoofArtwork.sourceCoverFillStrokeWidth(
           artSide: artSide
         )
       let glyphBlends: [PoofGlyphBlend] =
-        if sample != nil {
+        if isSmooth {
           smoothGlyphBlends ?? []
         } else if let progressiveBreakupBlends {
           progressiveBreakupBlends
@@ -390,13 +298,13 @@ private struct PreparedPoofCanvas: View {
           []
         }
       let clusterDetailWeight =
-        if !occludesSource, sample == nil, pose == .clusters {
+        if !occludesSource, !isSmooth, pose == .clusters {
           1.0
         } else {
           0.0
         }
       let cloudDetailWeight =
-        if !occludesSource, sample == nil, pose == .cloud {
+        if !occludesSource, !isSmooth, pose == .cloud {
           1.0
         } else {
           0.0
@@ -404,7 +312,7 @@ private struct PreparedPoofCanvas: View {
       var shadowContext = context
 
       if occludesSource,
-        sample == nil,
+        !isSmooth,
         let pose,
         pose == .cloud || pose == .clusters || pose == .puffs,
         let sourceRect
@@ -516,18 +424,6 @@ private struct PreparedPoofCanvas: View {
             path,
             with: .color(fill)
           )
-          if usesSmoothProgressive, smoothCoverScale > 0 {
-            var underpaintContext = context
-            underpaintContext.opacity = opacity
-            underpaintContext.stroke(
-              path,
-              with: .color(fill),
-              lineWidth:
-                coverFillStrokeWidth
-                * smoothCoverScale
-                * glyphScale
-            )
-          }
           glyphContext.stroke(
             path,
             with: .color(palette.outline),
@@ -596,37 +492,8 @@ private struct PreparedPoofCanvas: View {
     }
     .allowsHitTesting(false)
     .accessibilityHidden(true)
-    .onChange(
-      of: newProgressiveTweenInput,
-      initial: true
-    ) { _, input in
-      progressiveTweenInput = input
-      progressiveTweenPlan = input.map(
-        PoofProgressiveTweenPlan.init(input:)
-      )
-    }
   }
 
-  private func sourceCoverScale(
-    for sample: PoofPoseSample
-  ) -> Double {
-    // Keep the opaque seam-closing stroke at full width until dense puffs have
-    // covered the source, then shrink it away with the departing smoke.
-    if sample.segment < PoofPose.puffs.rawValue + 1 {
-      return 1
-    }
-
-    guard sample.start == .puffs, sample.end == .wisps else {
-      return 0
-    }
-
-    let amount = min(max(sample.amount, 0), 1)
-    let amountCubed = amount * amount * amount
-    let smootherAmount =
-      amountCubed
-      * (amount * (amount * 6 - 15) + 10)
-    return 1 - smootherAmount
-  }
 }
 
 enum PoofArtwork {
@@ -834,22 +701,6 @@ enum PoofArtwork {
     }
   }
 
-  static func renderedGlyphBlends(
-    for sample: PoofPoseSample,
-    occludesSource: Bool,
-    frameSet: PoofFrameSet
-  ) -> [PoofGlyphBlend] {
-    guard !occludesSource else {
-      // Progressive playback uses source-adaptive glyphs prepared from the
-      // laid-out source bounds.
-      return []
-    }
-
-    return Array(
-      frameSet.blends(for: sample).prefix(maximumRenderedElementCount)
-    )
-  }
-
   static func sourceCoverPath(
     for pose: PoofPose,
     in rect: CGRect,
@@ -956,34 +807,6 @@ enum PoofArtwork {
         tone: glyph.tone,
         paletteIndex: glyph.paletteIndex
       )
-    }
-  }
-
-  static func progressiveGlyphs(
-    for pose: PoofPose?,
-    in rect: CGRect,
-    artSide: Double,
-    frameSet: PoofFrameSet
-  ) -> [PoofGlyphLayer] {
-    guard let pose else {
-      return []
-    }
-
-    switch pose {
-    case .cloud, .clusters, .puffs:
-      return sourceCoverGlyphLayers(
-        for: pose,
-        in: rect,
-        artSide: artSide,
-        frameSet: frameSet
-      )
-    case .wisps, .ringlets:
-      return frameSet.glyphs(for: pose).enumerated().map {
-        PoofGlyphLayer(
-          glyph: $0.element,
-          paletteIndex: $0.offset
-        )
-      }
     }
   }
 
