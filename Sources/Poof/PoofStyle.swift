@@ -7,12 +7,9 @@ public enum PoofStyle: Hashable, Sendable {
   /// The crisp, compact clean-room recreation.
   case classic
 
-  /// A rounder pastel cloud with fuller, softer smoke shapes.
+  /// A rounder cloud with fuller, softer smoke shapes.
   case bloom
 
   /// A compact opening followed by a punchier radial snap.
   case snap
-
-  /// Light curls and wisps that rise as the item disappears.
-  case drift
 }

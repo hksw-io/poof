@@ -375,7 +375,9 @@ private struct PoofStage: View {
       case .poof(let progress):
         PoofEffect(
           progress: progress,
-          configuration: Self.configuration
+          configuration: Self.configuration,
+          palette: .automatic,
+          motion: .stepped
         )
         .frame(width: sourceSide, height: sourceSide)
       case .empty:

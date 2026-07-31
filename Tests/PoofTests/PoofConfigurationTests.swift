@@ -1,3 +1,4 @@
+import SwiftUI
 import Testing
 
 @testable import Poof
@@ -64,5 +65,19 @@ struct PoofConfigurationTests {
 
     #expect(configuration.spread == 0.82)
     #expect(configuration.fieldScale == 2.10)
+  }
+
+  @Test("Palette presets and custom colors remain stable")
+  func palettes() {
+    let custom = PoofPalette(colors: [.red, .blue])
+
+    #expect(PoofPalette.automatic == .monochrome)
+    #expect(PoofPalette.monochrome == PoofPalette(colors: []))
+    #expect(PoofPalette.pastel != .monochrome)
+    #expect(custom == PoofPalette(colors: [.red, .blue]))
+    #expect(custom != PoofPalette(colors: [.blue, .red]))
+    #expect(PoofPalette.automatic.colors(for: .classic).isEmpty)
+    #expect(PoofPalette.automatic.colors(for: .bloom).isEmpty)
+    #expect(PoofPalette.automatic.colors(for: .snap).isEmpty)
   }
 }

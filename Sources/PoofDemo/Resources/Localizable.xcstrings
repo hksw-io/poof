@@ -2,12 +2,12 @@
   "sourceLanguage" : "en",
   "strings" : {
     "Animation" : {
-      "comment" : "Preview option that uses the real one-third-second animation."
+      "comment" : "Preview option that animates the poof."
     },
     "Appearance" : {
       "comment" : "Label for the demo appearance picker."
     },
-    "A soft pastel cloud with a cartoony pop." : {
+    "A soft, full cloud with a cartoony pop." : {
       "comment" : "Short description of the Bloom poof style."
     },
     "A tighter poof with a punchier break." : {
@@ -34,11 +34,8 @@
     "Dark" : {
       "comment" : "Appearance option that uses dark mode."
     },
-    "Drift" : {
-      "comment" : "Name of the airy modern poof style."
-    },
-    "Four ways to poof" : {
-      "comment" : "Heading above the poof style comparison."
+    "Duration" : {
+      "comment" : "Label for the poof playback duration slider."
     },
     "Increased Contrast off" : {
       "comment" : "Status shown when Increased Contrast is disabled."
@@ -49,14 +46,23 @@
     "Light" : {
       "comment" : "Appearance option that uses light mode."
     },
-    "Light wisps that lift as they fade." : {
-      "comment" : "Short description of the Drift poof style."
+    "Grayscale" : {
+      "comment" : "Default poof palette option that uses neutral fills."
+    },
+    "Motion" : {
+      "comment" : "Label for choosing stepped or smooth poof motion."
+    },
+    "Palette" : {
+      "comment" : "Label for choosing poof fill colors."
+    },
+    "Pastel" : {
+      "comment" : "Poof palette option that uses the built-in pastel colors."
     },
     "Poof all" : {
-      "comment" : "Button that removes all four demo items."
+      "comment" : "Button that removes all three demo items."
     },
     "Preview" : {
-      "comment" : "Label for choosing normal playback, slow playback, or a static poof pose."
+      "comment" : "Label for choosing playback or a static poof pose."
     },
     "Puffs" : {
       "comment" : "Preview option for the dense puffs pose."
@@ -77,7 +83,7 @@
       "comment" : "Explanation shown when Reduce Motion is enabled."
     },
     "Restore" : {
-      "comment" : "Button that restores all four demo items."
+      "comment" : "Button that restores all three demo items."
     },
     "Ringlets" : {
       "comment" : "Preview option for the final ringlets pose."
@@ -85,14 +91,17 @@
     "Rounded square" : {
       "comment" : "Name of the rounded-square demo surface."
     },
-    "Slow motion" : {
-      "comment" : "Preview option that holds each poof pose for one second."
+    "Smooth" : {
+      "comment" : "Poof motion option that interpolates between poses."
     },
     "Snap" : {
       "comment" : "Name of the punchier modern poof style."
     },
     "Star" : {
       "comment" : "Name of the star-shaped demo surface."
+    },
+    "Stepped" : {
+      "comment" : "Poof motion option that holds five authored poses."
     },
     "Surface" : {
       "comment" : "Label for choosing the source shape to poof."
@@ -103,8 +112,11 @@
     "The crisp five-pose original." : {
       "comment" : "Short description of the Classic poof style."
     },
-    "The original, plus three playful takes designed for today." : {
+    "The original, plus two playful takes designed for today." : {
       "comment" : "Description above the poof style comparison."
+    },
+    "Three ways to poof" : {
+      "comment" : "Heading above the poof style comparison."
     },
     "Wisps" : {
       "comment" : "Preview option for the sparse wisps pose."

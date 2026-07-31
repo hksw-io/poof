@@ -1,4 +1,5 @@
 #if os(macOS)
+  import Foundation
   import Poof
   import SwiftUI
 
@@ -8,6 +9,9 @@
     @State private var playbackSeed: UInt64 = 0x504F_4F46
     @State private var previewMode = DemoPreviewMode.animation
     @State private var surface = DemoSurface.roundedSquare
+    @State private var palette = DemoPalette.automatic
+    @State private var motion = DemoMotion.stepped
+    @State private var playbackDuration = DemoPlaybackDuration.defaultValue
 
     var body: some View {
       VStack(spacing: 20) {
@@ -16,19 +20,24 @@
           isItemVisible: isItemVisible,
           playbackSeed: playbackSeed,
           previewMode: previewMode,
-          surface: surface
+          surface: surface,
+          palette: palette.poofPalette,
+          motion: motion.poofMotion
         )
         DemoControls(
           appearance: $appearance,
           previewMode: $previewMode,
           surface: $surface,
+          palette: $palette,
+          motion: $motion,
+          playbackDuration: $playbackDuration,
           isItemVisible: isItemVisible,
           toggleItem: toggleItem
         )
         AccessibilityStatus()
       }
       .padding(24)
-      .frame(minWidth: 680, minHeight: 620)
+      .frame(minWidth: 680, minHeight: 480)
       .preferredColorScheme(appearance.colorScheme)
       .onChange(of: previewMode) {
         isItemVisible = true
@@ -36,11 +45,21 @@
       .onChange(of: surface) {
         isItemVisible = true
       }
+      .onChange(of: palette) {
+        isItemVisible = true
+      }
+      .onChange(of: motion) {
+        isItemVisible = true
+      }
     }
 
     private func toggleItem() {
       if isItemVisible {
-        guard let animation = previewMode.playbackAnimation else {
+        guard
+          let animation = previewMode.playbackAnimation(
+            duration: playbackDuration
+          )
+        else {
           return
         }
 
@@ -48,7 +67,7 @@
           isItemVisible = false
         }
       } else {
-        // A shared seed keeps the four styles directly comparable.
+        // A shared seed keeps every style directly comparable.
         playbackSeed &+= 1
         isItemVisible = true
       }
@@ -59,14 +78,14 @@
     var body: some View {
       VStack(alignment: .leading, spacing: 4) {
         Text(
-          "Four ways to poof",
+          "Three ways to poof",
           bundle: #bundle,
           comment: "Heading above the poof style comparison."
         )
         .font(.title2.weight(.semibold))
 
         Text(
-          "The original, plus three playful takes designed for today.",
+          "The original, plus two playful takes designed for today.",
           bundle: #bundle,
           comment: "Description above the poof style comparison."
         )
@@ -81,6 +100,8 @@
     let playbackSeed: UInt64
     let previewMode: DemoPreviewMode
     let surface: DemoSurface
+    let palette: PoofPalette
+    let motion: PoofMotion
 
     var body: some View {
       Grid(horizontalSpacing: 16, verticalSpacing: 16) {
@@ -90,31 +111,27 @@
             isItemVisible: isItemVisible,
             playbackSeed: playbackSeed,
             previewMode: previewMode,
-            surface: surface
+            surface: surface,
+            palette: palette,
+            motion: motion
           )
           DemoStylePreview(
             style: .bloom,
             isItemVisible: isItemVisible,
             playbackSeed: playbackSeed,
             previewMode: previewMode,
-            surface: surface
+            surface: surface,
+            palette: palette,
+            motion: motion
           )
-        }
-
-        GridRow {
           DemoStylePreview(
             style: .snap,
             isItemVisible: isItemVisible,
             playbackSeed: playbackSeed,
             previewMode: previewMode,
-            surface: surface
-          )
-          DemoStylePreview(
-            style: .drift,
-            isItemVisible: isItemVisible,
-            playbackSeed: playbackSeed,
-            previewMode: previewMode,
-            surface: surface
+            surface: surface,
+            palette: palette,
+            motion: motion
           )
         }
       }
@@ -127,6 +144,8 @@
     let playbackSeed: UInt64
     let previewMode: DemoPreviewMode
     let surface: DemoSurface
+    let palette: PoofPalette
+    let motion: PoofMotion
 
     var body: some View {
       GroupBox {
@@ -136,7 +155,9 @@
               PoofEffect(
                 progress: progress,
                 style: style.poofStyle,
-                configuration: PoofConfiguration(seed: playbackSeed)
+                configuration: PoofConfiguration(seed: playbackSeed),
+                palette: palette,
+                motion: motion
               )
               .frame(width: surface.size.width, height: surface.size.height)
             } else if isItemVisible {
@@ -145,7 +166,9 @@
                   .poof(
                     style: style.poofStyle,
                     contentRemoval: .progressive,
-                    configuration: PoofConfiguration(seed: playbackSeed)
+                    configuration: PoofConfiguration(seed: playbackSeed),
+                    palette: palette,
+                    motion: motion
                   )
                 )
             }
@@ -214,94 +237,166 @@
     @Binding var appearance: DemoAppearance
     @Binding var previewMode: DemoPreviewMode
     @Binding var surface: DemoSurface
+    @Binding var palette: DemoPalette
+    @Binding var motion: DemoMotion
+    @Binding var playbackDuration: Double
 
     let isItemVisible: Bool
     let toggleItem: () -> Void
 
     var body: some View {
-      HStack(spacing: 20) {
-        Button(action: toggleItem) {
-          if isItemVisible {
+      VStack(spacing: 12) {
+        HStack(spacing: 20) {
+          Button(action: toggleItem) {
+            if isItemVisible {
+              Text(
+                "Poof all",
+                bundle: #bundle,
+                comment: "Button that removes all three demo items."
+              )
+            } else {
+              Text(
+                "Restore",
+                bundle: #bundle,
+                comment: "Button that restores all three demo items."
+              )
+            }
+          }
+          .buttonStyle(.borderedProminent)
+          .controlSize(.large)
+          .keyboardShortcut(.defaultAction)
+          .disabled(!previewMode.isPlayback)
+
+          Picker(selection: $previewMode) {
+            ForEach(DemoPreviewMode.allCases, id: \.self) { mode in
+              Text(mode.title)
+                .tag(mode)
+            }
+          } label: {
             Text(
-              "Poof all",
+              "Preview",
               bundle: #bundle,
-              comment: "Button that removes all four demo items."
+              comment:
+                "Label for choosing playback or a static poof pose."
             )
-          } else {
+          }
+          .pickerStyle(.menu)
+          .fixedSize()
+
+          Picker(selection: $surface) {
+            ForEach(DemoSurface.allCases) { surface in
+              Text(surface.title)
+                .tag(surface)
+            }
+          } label: {
             Text(
-              "Restore",
+              "Surface",
               bundle: #bundle,
-              comment: "Button that restores all four demo items."
+              comment: "Label for choosing the source shape to poof."
             )
           }
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .keyboardShortcut(.defaultAction)
-        .disabled(!previewMode.isPlayback)
+          .pickerStyle(.menu)
+          .fixedSize()
 
-        Picker(selection: $previewMode) {
-          ForEach(DemoPreviewMode.allCases, id: \.self) { mode in
-            Text(mode.title)
-              .tag(mode)
+          Spacer()
+
+          Picker(selection: $appearance) {
+            Text(
+              "System",
+              bundle: #bundle,
+              comment: "Appearance option that follows the system."
+            )
+            .tag(DemoAppearance.system)
+            Text(
+              "Light",
+              bundle: #bundle,
+              comment: "Appearance option that uses light mode."
+            )
+            .tag(DemoAppearance.light)
+            Text(
+              "Dark",
+              bundle: #bundle,
+              comment: "Appearance option that uses dark mode."
+            )
+            .tag(DemoAppearance.dark)
+          } label: {
+            Text(
+              "Appearance",
+              bundle: #bundle,
+              comment: "Label for the demo appearance picker."
+            )
           }
-        } label: {
-          Text(
-            "Preview",
-            bundle: #bundle,
-            comment:
-              "Label for choosing normal playback, slow playback, or a static poof pose."
-          )
+          .pickerStyle(.segmented)
+          .fixedSize()
         }
-        .pickerStyle(.menu)
-        .fixedSize()
 
-        Picker(selection: $surface) {
-          ForEach(DemoSurface.allCases) { surface in
-            Text(surface.title)
-              .tag(surface)
+        HStack(spacing: 20) {
+          Picker(selection: $palette) {
+            ForEach(DemoPalette.allCases, id: \.self) { palette in
+              Text(palette.title)
+                .tag(palette)
+            }
+          } label: {
+            Text(
+              "Palette",
+              bundle: #bundle,
+              comment: "Label for choosing poof fill colors."
+            )
           }
-        } label: {
+          .pickerStyle(.menu)
+          .fixedSize()
+
+          Picker(selection: $motion) {
+            ForEach(DemoMotion.allCases, id: \.self) { motion in
+              Text(motion.title)
+                .tag(motion)
+            }
+          } label: {
+            Text(
+              "Motion",
+              bundle: #bundle,
+              comment: "Label for choosing stepped or smooth poof motion."
+            )
+          }
+          .pickerStyle(.segmented)
+          .fixedSize()
+          .disabled(!previewMode.isPlayback)
+
+          Spacer()
+
+          Slider(
+            value: $playbackDuration,
+            in: DemoPlaybackDuration.range,
+            step: DemoPlaybackDuration.step
+          ) {
+            Text(
+              "Duration",
+              bundle: #bundle,
+              comment: "Label for the poof playback duration slider."
+            )
+          }
+          .frame(width: 240)
+          .disabled(!previewMode.isPlayback)
+
           Text(
-            "Surface",
-            bundle: #bundle,
-            comment: "Label for choosing the source shape to poof."
+            Measurement(
+              value: playbackDuration,
+              unit: UnitDuration.seconds
+            ),
+            format: .measurement(
+              width: .abbreviated,
+              usage: .asProvided,
+              numberFormatStyle: .number.precision(
+                .fractionLength(2)
+              )
+            )
+          )
+          .monospacedDigit()
+          .fixedSize()
+          .foregroundStyle(
+            previewMode.isPlayback ? .primary : .tertiary
           )
         }
-        .pickerStyle(.menu)
-        .fixedSize()
-        .disabled(!previewMode.isPlayback)
-
-        Spacer()
-
-        Picker(selection: $appearance) {
-          Text(
-            "System",
-            bundle: #bundle,
-            comment: "Appearance option that follows the system."
-          )
-          .tag(DemoAppearance.system)
-          Text(
-            "Light",
-            bundle: #bundle,
-            comment: "Appearance option that uses light mode."
-          )
-          .tag(DemoAppearance.light)
-          Text(
-            "Dark",
-            bundle: #bundle,
-            comment: "Appearance option that uses dark mode."
-          )
-          .tag(DemoAppearance.dark)
-        } label: {
-          Text(
-            "Appearance",
-            bundle: #bundle,
-            comment: "Label for the demo appearance picker."
-          )
-        }
-        .pickerStyle(.segmented)
-        .fixedSize()
       }
     }
   }
@@ -366,11 +461,10 @@
     }
   }
 
-  private enum DemoPoofStyle: Hashable {
+  enum DemoPoofStyle: CaseIterable, Hashable {
     case classic
     case bloom
     case snap
-    case drift
 
     var poofStyle: PoofStyle {
       switch self {
@@ -380,8 +474,6 @@
         .bloom
       case .snap:
         .snap
-      case .drift:
-        .drift
       }
     }
 
@@ -393,8 +485,6 @@
         LocalizedStringResource("Bloom", bundle: #bundle)
       case .snap:
         LocalizedStringResource("Snap", bundle: #bundle)
-      case .drift:
-        LocalizedStringResource("Drift", bundle: #bundle)
       }
     }
 
@@ -407,7 +497,7 @@
         )
       case .bloom:
         LocalizedStringResource(
-          "A soft pastel cloud with a cartoony pop.",
+          "A soft, full cloud with a cartoony pop.",
           bundle: #bundle
         )
       case .snap:
@@ -415,13 +505,60 @@
           "A tighter poof with a punchier break.",
           bundle: #bundle
         )
-      case .drift:
-        LocalizedStringResource(
-          "Light wisps that lift as they fade.",
-          bundle: #bundle
-        )
       }
     }
+  }
+
+  enum DemoPalette: CaseIterable, Hashable {
+    case automatic
+    case pastel
+
+    var poofPalette: PoofPalette {
+      switch self {
+      case .automatic:
+        .automatic
+      case .pastel:
+        .pastel
+      }
+    }
+
+    var title: LocalizedStringResource {
+      switch self {
+      case .automatic:
+        LocalizedStringResource("Grayscale", bundle: #bundle)
+      case .pastel:
+        LocalizedStringResource("Pastel", bundle: #bundle)
+      }
+    }
+  }
+
+  enum DemoMotion: CaseIterable, Hashable {
+    case stepped
+    case smooth
+
+    var poofMotion: PoofMotion {
+      switch self {
+      case .stepped:
+        .stepped
+      case .smooth:
+        .smooth
+      }
+    }
+
+    var title: LocalizedStringResource {
+      switch self {
+      case .stepped:
+        LocalizedStringResource("Stepped", bundle: #bundle)
+      case .smooth:
+        LocalizedStringResource("Smooth", bundle: #bundle)
+      }
+    }
+  }
+
+  enum DemoPlaybackDuration {
+    static let defaultValue = 1.0 / 3.0
+    static let range = defaultValue...5.0
+    static let step = 1.0 / 6.0
   }
 
   enum DemoSurface: CaseIterable, Hashable, Identifiable {
@@ -459,28 +596,24 @@
 
   enum DemoPreviewMode: CaseIterable, Hashable {
     case animation
-    case slowMotion
     case cloud
     case clusters
     case puffs
     case wisps
     case ringlets
 
-    // The five-second demo holds each of the five production poses for one
-    // second without changing the library's real playback timing.
-    static let slowPoseDuration = 1.0
-    static let slowPlaybackDuration = slowPoseDuration * 5
-
     var isPlayback: Bool {
-      playbackAnimation != nil
+      self == .animation
     }
 
-    var playbackAnimation: Animation? {
+    func playbackAnimation(duration: Double) -> Animation? {
       switch self {
       case .animation:
-        .poof
-      case .slowMotion:
-        .linear(duration: Self.slowPlaybackDuration)
+        .linear(
+          duration: min(
+            max(duration, DemoPlaybackDuration.range.lowerBound),
+            DemoPlaybackDuration.range.upperBound)
+        )
       case .cloud, .clusters, .puffs, .wisps, .ringlets:
         nil
       }
@@ -488,7 +621,7 @@
 
     var progress: Double? {
       switch self {
-      case .animation, .slowMotion:
+      case .animation:
         nil
       case .cloud:
         0.1
@@ -507,8 +640,6 @@
       switch self {
       case .animation:
         LocalizedStringResource("Animation", bundle: #bundle)
-      case .slowMotion:
-        LocalizedStringResource("Slow motion", bundle: #bundle)
       case .cloud:
         LocalizedStringResource("Cloud", bundle: #bundle)
       case .clusters:

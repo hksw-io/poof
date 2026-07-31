@@ -34,6 +34,8 @@ struct PoofTransitionTests {
   func sendableTypes() {
     requireSendable(PoofConfiguration.self)
     requireSendable(PoofStyle.self)
+    requireSendable(PoofPalette.self)
+    requireSendable(PoofMotion.self)
     requireSendable(PoofContentRemoval.self)
     requireSendable(PoofTransition.self)
   }
@@ -43,15 +45,17 @@ struct PoofTransitionTests {
     let classic = PoofTransition()
     let bloom = PoofTransition(style: .bloom)
     let progressive = PoofTransition(contentRemoval: .progressive)
-    let progressiveDrift = PoofTransition(
-      style: .drift,
-      contentRemoval: .progressive
+    let smoothPastelSnap = PoofTransition(
+      style: .snap,
+      contentRemoval: .progressive,
+      palette: .pastel,
+      motion: .smooth
     )
 
     requireSendable(type(of: classic))
     requireSendable(type(of: bloom))
     requireSendable(type(of: progressive))
-    requireSendable(type(of: progressiveDrift))
+    requireSendable(type(of: smoothPastelSnap))
   }
 
   @Test("Immediate and progressive removal preserve their source semantics")
@@ -92,6 +96,10 @@ struct PoofTransitionTests {
   @Test("Progressive source retires at the fully covering pose")
   func progressiveSourceMask() {
     let rect = CGRect(x: 0, y: 0, width: 84, height: 84)
+    let frameSet = PoofSimulation.makeFrameSet(
+      configuration: PoofConfiguration(seed: 1),
+      variationSeed: 1
+    )
 
     #expect(
       !PoofArtwork.sourceMaskPath(for: .cloud, in: rect).isEmpty
@@ -103,6 +111,21 @@ struct PoofTransitionTests {
     for pose in [PoofPose.puffs, .wisps, .ringlets] {
       #expect(PoofArtwork.sourceMaskPath(for: pose, in: rect).isEmpty)
     }
+
+    #expect(
+      !PoofSourceMask(
+        progress: 0.499_999,
+        motion: .smooth,
+        frameSet: frameSet
+      ).path(in: rect).isEmpty
+    )
+    #expect(
+      PoofSourceMask(
+        progress: 0.5,
+        motion: .smooth,
+        frameSet: frameSet
+      ).path(in: rect).isEmpty
+    )
   }
 
   @Test("Reduce Motion replaces spatial removal with a bounded fade")

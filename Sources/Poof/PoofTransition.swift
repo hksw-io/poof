@@ -17,33 +17,67 @@ public struct PoofTransition: Sendable, Transition {
   private let style: PoofStyle
   private let contentRemoval: PoofContentRemoval
   private let configuration: PoofConfiguration
+  private let palette: PoofPalette
+  private let motion: PoofMotion
 
   /// Creates a classic poof with immediate content removal.
-  public init(configuration: PoofConfiguration = .standard) {
+  ///
+  /// - Parameters:
+  ///   - configuration: The poof's density, spread, overscan, and seed.
+  ///   - palette: Fill colors for the smoke.
+  ///   - motion: Stepped or smoothly interpolated pose changes.
+  public init(
+    configuration: PoofConfiguration = .standard,
+    palette: PoofPalette = .automatic,
+    motion: PoofMotion = .stepped
+  ) {
     style = .classic
     contentRemoval = .immediate
     self.configuration = configuration
+    self.palette = palette
+    self.motion = motion
   }
 
   /// Creates a styled poof with immediate content removal.
+  ///
+  /// - Parameters:
+  ///   - style: The visual character of the poof.
+  ///   - configuration: The poof's density, spread, overscan, and seed.
+  ///   - palette: Fill colors for the smoke.
+  ///   - motion: Stepped or smoothly interpolated pose changes.
   public init(
     style: PoofStyle,
-    configuration: PoofConfiguration = .standard
+    configuration: PoofConfiguration = .standard,
+    palette: PoofPalette = .automatic,
+    motion: PoofMotion = .stepped
   ) {
     self.style = style
     contentRemoval = .immediate
     self.configuration = configuration
+    self.palette = palette
+    self.motion = motion
   }
 
   /// Creates a styled poof transition with a content-removal behavior.
+  ///
+  /// - Parameters:
+  ///   - style: The visual character of the poof.
+  ///   - contentRemoval: When the transitioning view disappears.
+  ///   - configuration: The poof's density, spread, overscan, and seed.
+  ///   - palette: Fill colors for the smoke.
+  ///   - motion: Stepped or smoothly interpolated pose changes.
   public init(
     style: PoofStyle = .classic,
     contentRemoval: PoofContentRemoval,
-    configuration: PoofConfiguration = .standard
+    configuration: PoofConfiguration = .standard,
+    palette: PoofPalette = .automatic,
+    motion: PoofMotion = .stepped
   ) {
     self.style = style
     self.contentRemoval = contentRemoval
     self.configuration = configuration
+    self.palette = palette
+    self.motion = motion
   }
 
   public func body(
@@ -58,7 +92,9 @@ public struct PoofTransition: Sendable, Transition {
         isRemoving: state.isRemoving,
         style: style,
         contentRemoval: contentRemoval,
-        configuration: configuration
+        configuration: configuration,
+        palette: palette,
+        motion: motion
       )
     )
   }
@@ -75,29 +111,46 @@ public struct PoofTransition: Sendable, Transition {
 extension Transition where Self == PoofTransition {
   /// A classic removal-only poof with immediate content removal.
   public static func poof(
-    _ configuration: PoofConfiguration = .standard
+    _ configuration: PoofConfiguration = .standard,
+    palette: PoofPalette = .automatic,
+    motion: PoofMotion = .stepped
   ) -> Self {
-    PoofTransition(configuration: configuration)
+    PoofTransition(
+      configuration: configuration,
+      palette: palette,
+      motion: motion
+    )
   }
 
   /// A styled removal-only poof with immediate content removal.
   public static func poof(
     style: PoofStyle,
-    configuration: PoofConfiguration = .standard
+    configuration: PoofConfiguration = .standard,
+    palette: PoofPalette = .automatic,
+    motion: PoofMotion = .stepped
   ) -> Self {
-    PoofTransition(style: style, configuration: configuration)
+    PoofTransition(
+      style: style,
+      configuration: configuration,
+      palette: palette,
+      motion: motion
+    )
   }
 
   /// A styled removal-only poof transition with content removal.
   public static func poof(
     style: PoofStyle = .classic,
     contentRemoval: PoofContentRemoval,
-    configuration: PoofConfiguration = .standard
+    configuration: PoofConfiguration = .standard,
+    palette: PoofPalette = .automatic,
+    motion: PoofMotion = .stepped
   ) -> Self {
     PoofTransition(
       style: style,
       contentRemoval: contentRemoval,
-      configuration: configuration
+      configuration: configuration,
+      palette: palette,
+      motion: motion
     )
   }
 }
@@ -122,6 +175,8 @@ private struct AdaptivePoofModifier: ViewModifier {
   let style: PoofStyle
   let contentRemoval: PoofContentRemoval
   let configuration: PoofConfiguration
+  let palette: PoofPalette
+  let motion: PoofMotion
 
   func body(content: Content) -> some View {
     let coversSource =
@@ -142,7 +197,12 @@ private struct AdaptivePoofModifier: ViewModifier {
         progress: progress,
         contentRemoval: contentRemoval,
         configuration: configuration,
-        palette: PoofPalette(contrast: colorSchemeContrast),
+        palette: PoofResolvedPalette(
+          contrast: colorSchemeContrast,
+          palette: palette,
+          style: style
+        ),
+        motion: motion,
         reducesMotion: reducesMotion,
         reducesTransparency: reducesTransparency,
         isRemoving: isRemoving,
@@ -184,7 +244,8 @@ private struct PoofProgressModifier: ViewModifier {
 
   @AnimatableIgnored var contentRemoval: PoofContentRemoval
   @AnimatableIgnored var configuration: PoofConfiguration
-  @AnimatableIgnored var palette: PoofPalette
+  @AnimatableIgnored var palette: PoofResolvedPalette
+  @AnimatableIgnored var motion: PoofMotion
   @AnimatableIgnored var reducesMotion: Bool
   @AnimatableIgnored var reducesTransparency: Bool
   @AnimatableIgnored var isRemoving: Bool
@@ -196,6 +257,7 @@ private struct PoofProgressModifier: ViewModifier {
         PoofContentRemovalModifier(
           progress: progress,
           contentRemoval: contentRemoval,
+          motion: motion,
           reducesMotion: reducesMotion,
           frameSet: frameSet
         )
@@ -214,6 +276,7 @@ private struct PoofProgressModifier: ViewModifier {
           PoofCanvas(
             progress: progress,
             palette: palette,
+            motion: motion,
             reducesMotion: reducesMotion,
             reducesTransparency: reducesTransparency,
             artScale: configuration.fieldScale,
@@ -237,6 +300,7 @@ private struct PoofProgressModifier: ViewModifier {
 struct PoofContentRemovalModifier: ViewModifier {
   let progress: Double
   let contentRemoval: PoofContentRemoval
+  let motion: PoofMotion
   let reducesMotion: Bool
   let frameSet: PoofFrameSet?
 
@@ -259,6 +323,7 @@ struct PoofContentRemovalModifier: ViewModifier {
         .mask {
           PoofSourceMask(
             progress: maskProgress,
+            motion: motion,
             frameSet: frameSet
           )
           .fill(.black)
@@ -282,6 +347,7 @@ struct PoofContentRemovalModifier: ViewModifier {
 
 struct PoofSourceMask: Shape {
   let progress: Double
+  let motion: PoofMotion
   let frameSet: PoofFrameSet?
 
   func path(in rect: CGRect) -> Path {
@@ -294,10 +360,17 @@ struct PoofSourceMask: Shape {
     }
 
     guard
-      frameSet != nil,
-      let pose = PoofSimulation.pose(for: progress)
+      frameSet != nil
     else {
       // Keep the source present if the precomputed playback is not ready yet.
+      return Path(rect)
+    }
+
+    if motion == .smooth {
+      return progress < 0.5 ? Path(rect) : Path()
+    }
+
+    guard let pose = PoofSimulation.pose(for: progress) else {
       return Path(rect)
     }
 
