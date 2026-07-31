@@ -6,7 +6,6 @@ import SwiftUI
 struct PoofMediaGenerator {
   private static let macSize = CGSize(width: 640, height: 400)
   private static let optionsSize = CGSize(width: 940, height: 580)
-  private static let platformSize = CGSize(width: 940, height: 650)
   // The dense middle pose stays recognizable without requiring motion.
   private static let stillFrameIndex = 3
   private static let optionsStillFrameIndex =
@@ -28,10 +27,6 @@ struct PoofMediaGenerator {
       let optionsGIFURL = outputDirectory.appending(
         path: "poof-options-\(suffix).gif"
       )
-      let platformGIFURL = outputDirectory.appending(
-        path: "poof-platforms-\(suffix).gif"
-      )
-
       try write(
         to: macGIFURL,
         size: macSize
@@ -47,13 +42,6 @@ struct PoofMediaGenerator {
         OptionsPreview(appearance: appearance, frame: frame)
       }
 
-      try write(
-        to: platformGIFURL,
-        size: platformSize
-      ) { frame in
-        PlatformPreview(appearance: appearance, frame: frame)
-      }
-
       try StillWriter.write(
         frameAt: stillFrameIndex,
         from: macGIFURL,
@@ -66,13 +54,6 @@ struct PoofMediaGenerator {
         from: optionsGIFURL,
         to: outputDirectory.appending(
           path: "poof-options-\(suffix).png"
-        )
-      )
-      try StillWriter.write(
-        frameAt: stillFrameIndex,
-        from: platformGIFURL,
-        to: outputDirectory.appending(
-          path: "poof-platforms-\(suffix).png"
         )
       )
     }

@@ -47,6 +47,16 @@ https://github.com/hksw-io/poof.git
 
 Set the dependency rule to **Up to Next Major Version** starting at `1.1.0`.
 
+From the root of another Swift package, SwiftPM can add Poof and link its
+library product to a target:
+
+```sh
+swift package add-dependency https://github.com/hksw-io/poof.git --from 1.1.0
+swift package add-target-dependency Poof YourTarget --package poof
+```
+
+Replace `YourTarget` with the name of the target that imports Poof.
+
 For a package manifest, add the package and product dependency:
 
 ```swift
@@ -192,24 +202,6 @@ Progressive removal derives its cover from the source bounds, so the same API
 works with compact icons, circles, wide capsules, and irregular shapes. The
 smoke can cross the edge slightly to avoid tracing an obvious geometric
 outline.
-
-## Supported platforms
-
-The public renderer is shared by iPhone, iPad, Mac, Apple Watch, Apple TV, and
-Apple Vision Pro. This gallery shows it at representative control sizes and
-follows the README’s light or dark appearance.
-
-<picture>
-  <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="Documentation/Media/poof-platforms-dark.png">
-  <source media="(prefers-reduced-motion: reduce)" srcset="Documentation/Media/poof-platforms-light.png">
-  <source media="(prefers-color-scheme: dark)" srcset="Documentation/Media/poof-platforms-dark.gif">
-  <source media="(prefers-color-scheme: light)" srcset="Documentation/Media/poof-platforms-light.gif">
-  <img src="Documentation/Media/poof-platforms-light.gif" alt="The Poof animation at representative sizes for Mac, iPhone, iPad, Apple Watch, Apple TV, and Apple Vision Pro" width="940">
-</picture>
-
-The gallery is generated from `PoofEffect`, not recorded simulator footage.
-Static frames replace the GIFs when Reduce Motion is enabled. CI builds the
-package for every supported platform.
 
 ## Configuration
 

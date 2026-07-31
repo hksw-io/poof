@@ -246,268 +246,6 @@ private struct OptionCard: View {
   }
 }
 
-struct PlatformPreview: View {
-  let appearance: ColorScheme
-  let frame: CaptureFrame
-
-  private let columns: [PlatformKind] = [.mac, .iPhone, .iPad]
-  private let secondRow: [PlatformKind] = [.watch, .tv, .visionPro]
-
-  private var palette: MediaPalette {
-    MediaPalette(appearance: appearance)
-  }
-
-  var body: some View {
-    VStack(spacing: 18) {
-      VStack(spacing: 5) {
-        Text("One SwiftUI renderer")
-          .font(.system(size: 25, weight: .bold, design: .rounded))
-          .foregroundStyle(palette.text)
-
-        Text("Representative control sizes across supported platforms")
-          .font(.system(size: 14, weight: .medium, design: .rounded))
-          .foregroundStyle(palette.secondaryText)
-      }
-
-      Grid(horizontalSpacing: 16, verticalSpacing: 16) {
-        GridRow {
-          ForEach(columns, id: \.self) { platform in
-            PlatformCard(
-              platform: platform,
-              frame: frame,
-              palette: palette
-            )
-          }
-        }
-
-        GridRow {
-          ForEach(secondRow, id: \.self) { platform in
-            PlatformCard(
-              platform: platform,
-              frame: frame,
-              palette: palette
-            )
-          }
-        }
-      }
-    }
-    .frame(width: 940, height: 650)
-    .background(palette.page)
-    .environment(\.colorScheme, appearance)
-  }
-}
-
-private struct PlatformCard: View {
-  let platform: PlatformKind
-  let frame: CaptureFrame
-  let palette: MediaPalette
-
-  var body: some View {
-    VStack(spacing: 10) {
-      Text(platform.title)
-        .font(.system(size: 14, weight: .semibold, design: .rounded))
-        .foregroundStyle(palette.text)
-
-      PlatformDevice(
-        platform: platform,
-        frame: frame,
-        palette: palette
-      )
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    .padding(14)
-    .frame(width: 288, height: 246)
-    .background {
-      RoundedRectangle(cornerRadius: 20, style: .continuous)
-        .fill(palette.card)
-    }
-    .overlay {
-      RoundedRectangle(cornerRadius: 20, style: .continuous)
-        .stroke(palette.border, lineWidth: 1)
-    }
-  }
-}
-
-private struct PlatformDevice: View {
-  let platform: PlatformKind
-  let frame: CaptureFrame
-  let palette: MediaPalette
-
-  @ViewBuilder
-  var body: some View {
-    switch platform {
-    case .mac:
-      MacDevice(frame: frame, palette: palette)
-    case .iPhone:
-      PhoneDevice(frame: frame, palette: palette)
-    case .iPad:
-      TabletDevice(frame: frame, palette: palette)
-    case .watch:
-      WatchDevice(frame: frame, palette: palette)
-    case .tv:
-      TVDevice(frame: frame, palette: palette)
-    case .visionPro:
-      VisionDevice(frame: frame, palette: palette)
-    }
-  }
-}
-
-private struct MacDevice: View {
-  let frame: CaptureFrame
-  let palette: MediaPalette
-
-  var body: some View {
-    VStack(spacing: 0) {
-      ZStack {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-          .fill(palette.device)
-          .frame(width: 196, height: 130)
-
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-          .fill(palette.surface)
-          .frame(width: 182, height: 111)
-
-        PoofStage(frame: frame, side: 86, palette: palette)
-      }
-
-      Capsule()
-        .fill(palette.device)
-        .frame(width: 56, height: 9)
-    }
-  }
-}
-
-private struct PhoneDevice: View {
-  let frame: CaptureFrame
-  let palette: MediaPalette
-
-  var body: some View {
-    ZStack(alignment: .top) {
-      RoundedRectangle(cornerRadius: 25, style: .continuous)
-        .fill(palette.device)
-        .frame(width: 91, height: 174)
-
-      RoundedRectangle(cornerRadius: 21, style: .continuous)
-        .fill(palette.surface)
-        .frame(width: 81, height: 164)
-        .padding(.top, 5)
-
-      Capsule()
-        .fill(palette.device)
-        .frame(width: 29, height: 8)
-        .padding(.top, 10)
-
-      PoofStage(frame: frame, side: 72, palette: palette)
-        .padding(.top, 47)
-    }
-  }
-}
-
-private struct TabletDevice: View {
-  let frame: CaptureFrame
-  let palette: MediaPalette
-
-  var body: some View {
-    ZStack {
-      RoundedRectangle(cornerRadius: 18, style: .continuous)
-        .fill(palette.device)
-        .frame(width: 142, height: 174)
-
-      RoundedRectangle(cornerRadius: 14, style: .continuous)
-        .fill(palette.surface)
-        .frame(width: 132, height: 164)
-
-      PoofStage(frame: frame, side: 82, palette: palette)
-    }
-  }
-}
-
-private struct WatchDevice: View {
-  let frame: CaptureFrame
-  let palette: MediaPalette
-
-  var body: some View {
-    VStack(spacing: -2) {
-      Capsule()
-        .fill(palette.device)
-        .frame(width: 48, height: 28)
-
-      ZStack {
-        RoundedRectangle(cornerRadius: 22, style: .continuous)
-          .fill(palette.device)
-          .frame(width: 96, height: 112)
-
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-          .fill(palette.surface)
-          .frame(width: 86, height: 102)
-
-        PoofStage(frame: frame, side: 62, palette: palette)
-      }
-
-      Capsule()
-        .fill(palette.device)
-        .frame(width: 48, height: 28)
-    }
-  }
-}
-
-private struct TVDevice: View {
-  let frame: CaptureFrame
-  let palette: MediaPalette
-
-  var body: some View {
-    VStack(spacing: 0) {
-      ZStack {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
-          .fill(palette.device)
-          .frame(width: 202, height: 126)
-
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(palette.surface)
-          .frame(width: 190, height: 114)
-
-        PoofStage(frame: frame, side: 82, palette: palette)
-      }
-
-      Rectangle()
-        .fill(palette.device)
-        .frame(width: 5, height: 13)
-
-      Capsule()
-        .fill(palette.device)
-        .frame(width: 58, height: 7)
-    }
-  }
-}
-
-private struct VisionDevice: View {
-  let frame: CaptureFrame
-  let palette: MediaPalette
-
-  var body: some View {
-    ZStack {
-      RoundedRectangle(cornerRadius: 28, style: .continuous)
-        .fill(palette.surface)
-        .frame(width: 202, height: 136)
-        .overlay {
-          RoundedRectangle(cornerRadius: 28, style: .continuous)
-            .stroke(palette.device, lineWidth: 4)
-        }
-
-      HStack(spacing: 26) {
-        Circle()
-          .stroke(palette.border, lineWidth: 2)
-        Circle()
-          .stroke(palette.border, lineWidth: 2)
-      }
-      .frame(width: 118, height: 44)
-      .opacity(0.45)
-
-      PoofStage(frame: frame, side: 78, palette: palette)
-    }
-  }
-}
-
 private struct PoofStage: View {
   // A fixed seed keeps committed media stable when only the generator changes.
   private static let configuration = PoofConfiguration(seed: 0x504F_4F46)
@@ -614,38 +352,11 @@ private struct PackageMark: Shape {
   }
 }
 
-enum PlatformKind: Hashable {
-  case iPad
-  case iPhone
-  case mac
-  case tv
-  case visionPro
-  case watch
-
-  var title: String {
-    switch self {
-    case .iPad:
-      "iPad"
-    case .iPhone:
-      "iPhone"
-    case .mac:
-      "Mac"
-    case .tv:
-      "Apple TV"
-    case .visionPro:
-      "Apple Vision Pro"
-    case .watch:
-      "Apple Watch"
-    }
-  }
-}
-
 struct MediaPalette {
   let accent: Color
   let border: Color
   let card: Color
   let chrome: Color
-  let device: Color
   let page: Color
   let secondaryText: Color
   let shadow: Color
@@ -660,7 +371,6 @@ struct MediaPalette {
       border = Color.white.opacity(0.13)
       card = Color(red: 0.105, green: 0.11, blue: 0.13)
       chrome = Color(red: 0.13, green: 0.135, blue: 0.15)
-      device = Color(red: 0.31, green: 0.32, blue: 0.35)
       page = Color(red: 0.055, green: 0.06, blue: 0.07)
       secondaryText = Color.white.opacity(0.62)
       shadow = Color.black.opacity(0.48)
@@ -670,7 +380,6 @@ struct MediaPalette {
       border = Color.black.opacity(0.12)
       card = Color(red: 0.97, green: 0.975, blue: 0.985)
       chrome = Color(red: 0.94, green: 0.945, blue: 0.955)
-      device = Color(red: 0.25, green: 0.26, blue: 0.29)
       page = Color(red: 0.91, green: 0.925, blue: 0.95)
       secondaryText = Color.black.opacity(0.56)
       shadow = Color.black.opacity(0.18)
