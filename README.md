@@ -162,6 +162,20 @@ moves it along a continuous path, and scales it in or out at a staggered,
 playback-seeded moment. It does not fade or swap puffs mid-flight. Motion choice
 does not change the playback duration.
 
+### Options at a glance
+
+This comparison uses the same fixed seed in every card, so the differences come
+from style, motion, and palette. The playback is slowed to one second here; the
+library still plays each poof in one-third of a second.
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce) and (prefers-color-scheme: dark)" srcset="Documentation/Media/poof-options-dark.png">
+  <source media="(prefers-reduced-motion: reduce)" srcset="Documentation/Media/poof-options-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="Documentation/Media/poof-options-dark.gif">
+  <source media="(prefers-color-scheme: light)" srcset="Documentation/Media/poof-options-light.gif">
+  <img src="Documentation/Media/poof-options-light.gif" alt="Four Poof animations comparing stepped and smooth motion with grayscale, pastel, and custom palettes" width="940">
+</picture>
+
 The default `.immediate` removal hides the source as playback begins. Use
 `.progressive` to let dense smoke cover the source before it disappears:
 

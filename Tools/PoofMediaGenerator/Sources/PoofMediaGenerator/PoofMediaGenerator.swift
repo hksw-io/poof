@@ -5,9 +5,12 @@ import SwiftUI
 @main
 struct PoofMediaGenerator {
   private static let macSize = CGSize(width: 640, height: 400)
+  private static let optionsSize = CGSize(width: 940, height: 580)
   private static let platformSize = CGSize(width: 940, height: 650)
   // The dense middle pose stays recognizable without requiring motion.
   private static let stillFrameIndex = 3
+  private static let optionsStillFrameIndex =
+    CaptureFrame.optionSequence.count / 2
 
   @MainActor
   static func main() throws {
@@ -22,6 +25,9 @@ struct PoofMediaGenerator {
       let macGIFURL = outputDirectory.appending(
         path: "poof-macos-\(suffix).gif"
       )
+      let optionsGIFURL = outputDirectory.appending(
+        path: "poof-options-\(suffix).gif"
+      )
       let platformGIFURL = outputDirectory.appending(
         path: "poof-platforms-\(suffix).gif"
       )
@@ -31,6 +37,14 @@ struct PoofMediaGenerator {
         size: macSize
       ) { frame in
         MacPreview(appearance: appearance, frame: frame)
+      }
+
+      try write(
+        to: optionsGIFURL,
+        size: optionsSize,
+        frames: CaptureFrame.optionSequence
+      ) { frame in
+        OptionsPreview(appearance: appearance, frame: frame)
       }
 
       try write(
@@ -48,6 +62,13 @@ struct PoofMediaGenerator {
         )
       )
       try StillWriter.write(
+        frameAt: optionsStillFrameIndex,
+        from: optionsGIFURL,
+        to: outputDirectory.appending(
+          path: "poof-options-\(suffix).png"
+        )
+      )
+      try StillWriter.write(
         frameAt: stillFrameIndex,
         from: platformGIFURL,
         to: outputDirectory.appending(
@@ -61,9 +82,10 @@ struct PoofMediaGenerator {
   private static func write<Content: View>(
     to url: URL,
     size: CGSize,
+    frames captureFrames: [CaptureFrame] = CaptureFrame.sequence,
     content: (CaptureFrame) -> Content
   ) throws {
-    let frames = try CaptureFrame.sequence.map { frame in
+    let frames = try captureFrames.map { frame in
       let view = content(frame)
         .frame(width: size.width, height: size.height)
       let renderer = ImageRenderer(content: view)

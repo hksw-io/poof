@@ -1,12 +1,14 @@
 import Poof
 import SwiftUI
 
-struct CaptureFrame: Sendable {
-  enum Phase: Sendable {
+struct CaptureFrame: Equatable, Sendable {
+  enum Phase: Equatable, Sendable {
     case empty
     case poof(Double)
     case source
   }
+
+  private static let optionAnimationFrameCount = 25
 
   // GIF delays use centiseconds. Alternating 7 and 6 keeps the five-pose
   // playback at 0.33 seconds instead of rounding every pose up.
@@ -20,8 +22,74 @@ struct CaptureFrame: Sendable {
     CaptureFrame(phase: .empty, delay: 0.90),
   ]
 
+  // A one-second playback makes the motion choices readable in documentation.
+  // Twenty-five frames also maps cleanly to GIF centisecond delays.
+  static let optionSequence =
+    [CaptureFrame(phase: .source, delay: 0.75)]
+    + (0..<optionAnimationFrameCount).map { frameIndex in
+      CaptureFrame(
+        phase: .poof(
+          (Double(frameIndex) + 0.5)
+            / Double(optionAnimationFrameCount)
+        ),
+        delay: 0.04
+      )
+    }
+    + [CaptureFrame(phase: .empty, delay: 0.75)]
+
   let phase: Phase
   let delay: Double
+}
+
+struct MediaOption: Identifiable, Sendable {
+  static let all = [
+    MediaOption(
+      id: "classic-stepped",
+      style: .classic,
+      motion: .stepped,
+      palette: .automatic,
+      title: "Classic",
+      detail: "Stepped · Grayscale"
+    ),
+    MediaOption(
+      id: "classic-smooth",
+      style: .classic,
+      motion: .smooth,
+      palette: .automatic,
+      title: "Classic",
+      detail: "Smooth · Grayscale"
+    ),
+    MediaOption(
+      id: "bloom-pastel",
+      style: .bloom,
+      motion: .smooth,
+      palette: .pastel,
+      title: "Bloom",
+      detail: "Smooth · Pastel"
+    ),
+    MediaOption(
+      id: "snap-custom",
+      style: .snap,
+      motion: .smooth,
+      palette: PoofPalette(
+        colors: [
+          Color(red: 1.00, green: 0.63, blue: 0.52),
+          Color(red: 0.48, green: 0.78, blue: 1.00),
+          Color(red: 0.56, green: 0.90, blue: 0.68),
+          Color(red: 0.78, green: 0.67, blue: 1.00),
+        ]
+      ),
+      title: "Snap",
+      detail: "Smooth · Custom palette"
+    ),
+  ]
+
+  let id: String
+  let style: PoofStyle
+  let motion: PoofMotion
+  let palette: PoofPalette
+  let title: String
+  let detail: String
 }
 
 struct MacPreview: View {
@@ -89,6 +157,91 @@ struct MacPreview: View {
       Rectangle()
         .fill(palette.border)
         .frame(height: 1)
+    }
+  }
+}
+
+struct OptionsPreview: View {
+  let appearance: ColorScheme
+  let frame: CaptureFrame
+
+  private var palette: MediaPalette {
+    MediaPalette(appearance: appearance)
+  }
+
+  var body: some View {
+    VStack(spacing: 18) {
+      VStack(spacing: 5) {
+        Text("One poof, four choices")
+          .font(.system(size: 25, weight: .bold, design: .rounded))
+          .foregroundStyle(palette.text)
+
+        Text("Style, motion, and color can be chosen independently")
+          .font(.system(size: 14, weight: .medium, design: .rounded))
+          .foregroundStyle(palette.secondaryText)
+      }
+
+      Grid(horizontalSpacing: 16, verticalSpacing: 16) {
+        GridRow {
+          ForEach(MediaOption.all.prefix(2)) { option in
+            OptionCard(
+              option: option,
+              frame: frame,
+              palette: palette
+            )
+          }
+        }
+
+        GridRow {
+          ForEach(MediaOption.all.suffix(2)) { option in
+            OptionCard(
+              option: option,
+              frame: frame,
+              palette: palette
+            )
+          }
+        }
+      }
+    }
+    .frame(width: 940, height: 580)
+    .background(palette.page)
+    .environment(\.colorScheme, appearance)
+  }
+}
+
+private struct OptionCard: View {
+  let option: MediaOption
+  let frame: CaptureFrame
+  let palette: MediaPalette
+
+  var body: some View {
+    VStack(spacing: 2) {
+      Text(option.title)
+        .font(.system(size: 16, weight: .semibold, design: .rounded))
+        .foregroundStyle(palette.text)
+
+      Text(option.detail)
+        .font(.system(size: 13, weight: .medium, design: .rounded))
+        .foregroundStyle(palette.secondaryText)
+
+      PoofStage(
+        frame: frame,
+        side: 158,
+        palette: palette,
+        style: option.style,
+        poofPalette: option.palette,
+        motion: option.motion
+      )
+    }
+    .padding(.top, 12)
+    .frame(width: 438, height: 220)
+    .background {
+      RoundedRectangle(cornerRadius: 20, style: .continuous)
+        .fill(palette.card)
+    }
+    .overlay {
+      RoundedRectangle(cornerRadius: 20, style: .continuous)
+        .stroke(palette.border, lineWidth: 1)
     }
   }
 }
@@ -362,6 +515,9 @@ private struct PoofStage: View {
   let frame: CaptureFrame
   let side: CGFloat
   let palette: MediaPalette
+  var style = PoofStyle.classic
+  var poofPalette = PoofPalette.automatic
+  var motion = PoofMotion.stepped
 
   private var sourceSide: CGFloat {
     side * 0.68
@@ -375,9 +531,10 @@ private struct PoofStage: View {
       case .poof(let progress):
         PoofEffect(
           progress: progress,
+          style: style,
           configuration: Self.configuration,
-          palette: .automatic,
-          motion: .stepped
+          palette: poofPalette,
+          motion: motion
         )
         .frame(width: sourceSide, height: sourceSide)
       case .empty:
