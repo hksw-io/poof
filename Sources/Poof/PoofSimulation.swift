@@ -1080,11 +1080,23 @@ enum PoofSimulation {
       return nil
     }
 
+    // Appearance follows the descriptor a glyph was drawn from, while
+    // variation follows the glyph slot. Two slots may share a descriptor, and
+    // they must look alike but not land on top of each other.
+    let descriptorIndex = descriptorIndex(
+      at: index,
+      pose: pose,
+      configuration: configuration
+    )
     let variedGlyph = varied(
       styled(
-        matchedReferenceGeometry(glyph, pose: pose, index: index),
+        matchedReferenceGeometry(
+          glyph,
+          pose: pose,
+          index: descriptorIndex
+        ),
         pose: pose,
-        index: index,
+        index: descriptorIndex,
         style: style
       ),
       pose: pose,
@@ -1261,22 +1273,58 @@ enum PoofSimulation {
     )
   }
 
+  static func breakupReferences(for pose: PoofPose) -> [PoofGlyph] {
+    switch pose {
+    case .puffs:
+      puffReferences
+    case .wisps:
+      wispReferences
+    case .ringlets:
+      ringletReferences
+    case .cloud, .clusters:
+      []
+    }
+  }
+
+  /// The measured descriptor a glyph slot is drawn from.
+  ///
+  /// The breakup poses stretch or repeat their descriptor tables to match
+  /// ``PoofConfiguration/particleCount``, so a slot only equals its descriptor
+  /// at the default count. Contour, paint, and the measured size calibration
+  /// key on this value so they stay attached to the descriptor they were
+  /// authored against. Poses without descriptors answer with the slot itself.
+  static func descriptorIndex(
+    at index: Int,
+    pose: PoofPose,
+    configuration: PoofConfiguration
+  ) -> Int {
+    let referenceCount = breakupReferences(for: pose).count
+    let count = glyphCount(for: pose, configuration: configuration)
+
+    guard referenceCount > 0, count > 0 else {
+      return index
+    }
+
+    guard count <= referenceCount else {
+      return index % referenceCount
+    }
+
+    return min(
+      Int(
+        (Double(index) + 0.5)
+          * Double(referenceCount)
+          / Double(count)
+      ),
+      referenceCount - 1
+    )
+  }
+
   private static func breakupGlyph(
     at index: Int,
     pose: PoofPose,
     configuration: PoofConfiguration
   ) -> PoofGlyph? {
-    let references: [PoofGlyph] =
-      switch pose {
-      case .puffs:
-        puffReferences
-      case .wisps:
-        wispReferences
-      case .ringlets:
-        ringletReferences
-      case .cloud, .clusters:
-        []
-      }
+    let references = breakupReferences(for: pose)
     let count = glyphCount(for: pose, configuration: configuration)
 
     guard
@@ -1286,20 +1334,13 @@ enum PoofSimulation {
       return nil
     }
 
-    let referenceIndex =
-      if count <= references.count {
-        min(
-          Int(
-            (Double(index) + 0.5)
-              * Double(references.count)
-              / Double(count)
-          ),
-          references.count - 1
-        )
-      } else {
-        index % references.count
-      }
-    let reference = references[referenceIndex]
+    let reference = references[
+      descriptorIndex(
+        at: index,
+        pose: pose,
+        configuration: configuration
+      )
+    ]
     let spreadScale = configuration.spread / referenceSpread
 
     guard index >= references.count else {
@@ -1802,9 +1843,12 @@ enum PoofSimulation {
   private static func styled(
     _ glyph: PoofGlyph,
     pose: PoofPose,
-    index: Int,
+    index descriptorIndex: Int,
     style: PoofStyle
   ) -> PoofGlyph {
+    // Keyed on the descriptor index so a given measured descriptor keeps its
+    // contour and paint whatever `particleCount` is in play.
+    let index = descriptorIndex
     let contour: PoofContour
     let paint: PoofPaint
 
@@ -2069,10 +2113,13 @@ enum PoofSimulation {
   private static func matchedReferenceGeometry(
     _ glyph: PoofGlyph,
     pose: PoofPose,
-    index: Int
+    index descriptorIndex: Int
   ) -> PoofGlyph {
     // Calibrate the authored vectors to the clean-room measurement envelopes
-    // asserted by the rendering tests.
+    // asserted by the rendering tests. `descriptorIndex` addresses the
+    // measured tables, not the glyph slot, so the calibration stays attached
+    // to the descriptor it was fitted against at any particle count.
+    let index = descriptorIndex
     let positionScaleX: Double
     let positionScaleY: Double
     let sizeScaleX: Double

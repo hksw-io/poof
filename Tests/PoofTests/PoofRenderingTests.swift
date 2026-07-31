@@ -1433,6 +1433,69 @@ struct PoofRenderingTests {
     #expect(puffsBounds.height > ringletsBounds.height)
   }
 
+  @Test("Later poses lose mass at every particle count")
+  func laterPosesContractAtEveryParticleCount() throws {
+    // The measured size calibration addresses the descriptor tables, which the
+    // breakup poses stretch or repeat to reach `particleCount`. Keyed on the
+    // glyph slot instead, the small and large descriptor families separate
+    // only at the default 28, and the sparse pose can out-weigh the dense one.
+    for particleCount in [12, 14, 28, 64] {
+      let puffs = try #require(
+        snapshot(progress: 0.50, particleCount: particleCount)
+      )
+      let wisps = try #require(
+        snapshot(progress: 0.70, particleCount: particleCount)
+      )
+      let ringlets = try #require(
+        snapshot(progress: 0.90, particleCount: particleCount)
+      )
+
+      #expect(
+        puffs.statistics.alphaTotal > wisps.statistics.alphaTotal,
+        """
+        \(particleCount) particles: puffs \(puffs.statistics.alphaTotal), \
+        wisps \(wisps.statistics.alphaTotal)
+        """
+      )
+      #expect(
+        wisps.statistics.alphaTotal > ringlets.statistics.alphaTotal,
+        """
+        \(particleCount) particles: wisps \(wisps.statistics.alphaTotal), \
+        ringlets \(ringlets.statistics.alphaTotal)
+        """
+      )
+    }
+  }
+
+  @Test("Descriptor selection survives every particle count")
+  func descriptorIndexStaysInsideItsTable() {
+    for particleCount in [12, 14, 24, 28, 41, 64] {
+      let configuration = PoofConfiguration(particleCount: particleCount)
+
+      for pose in [PoofPose.puffs, .wisps, .ringlets] {
+        let referenceCount = PoofSimulation.breakupReferences(for: pose).count
+        let count = PoofSimulation.glyphCount(
+          for: pose,
+          configuration: configuration
+        )
+        let indices = (0..<count).map { index in
+          PoofSimulation.descriptorIndex(
+            at: index,
+            pose: pose,
+            configuration: configuration
+          )
+        }
+
+        #expect(indices.allSatisfy { (0..<referenceCount).contains($0) })
+        // Fewer slots than descriptors must sample distinct descriptors, so
+        // thinning the pose never draws the same measured shape twice.
+        if count <= referenceCount {
+          #expect(Set(indices).count == count)
+        }
+      }
+    }
+  }
+
   @Test("Light and dark appearances use identical style palettes")
   func lightAndDarkArtMatches() throws {
     for style in allPoofStyles {
