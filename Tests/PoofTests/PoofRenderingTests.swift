@@ -2104,6 +2104,76 @@ struct PoofRenderingTests {
     #expect(first.normalizedDifference(from: second) < 0.08)
   }
 
+  @Test("Spread widens the breakup poses and leaves the openings alone")
+  func spreadWidensBreakup() throws {
+    // Every other rendering test runs at the default 0.82, which is exactly
+    // referenceSpread, so the spread scale is always one and hard-coding it
+    // would fail nothing at all.
+    var breakupWidths: [Int] = []
+
+    for spread in [0.55, 0.82, 1.10] {
+      let openings = try #require(
+        snapshot(progress: 0.10, spread: spread)
+      )
+      let defaultOpenings = try #require(snapshot(progress: 0.10))
+      let breakup = try #require(
+        snapshot(progress: 0.70, spread: spread)
+      )
+
+      // The opening silhouettes are authored, not spread-derived.
+      #expect(openings.pixels == defaultOpenings.pixels)
+
+      breakupWidths.append(
+        try #require(breakup.statistics.bounds).width
+      )
+    }
+
+    #expect(breakupWidths[0] < breakupWidths[1], "\(breakupWidths)")
+    #expect(breakupWidths[1] < breakupWidths[2], "\(breakupWidths)")
+  }
+
+  @Test("Spread reaches the simulation as a scale on breakup positions")
+  func spreadScalesBreakupDescriptors() {
+    func meanRadius(spread: Double) -> Double {
+      let configuration = PoofConfiguration(
+        spread: spread,
+        seed: 0x504F_4F46
+      )
+      var total = 0.0
+      var count = 0
+
+      for pose in [PoofPose.puffs, .wisps, .ringlets] {
+        for index
+          in 0..<PoofSimulation.glyphCount(
+            for: pose,
+            configuration: configuration
+          )
+        {
+          guard
+            let glyph = PoofSimulation.glyph(
+              at: index,
+              pose: pose,
+              configuration: configuration,
+              variationSeed: 0x504F_4F46
+            )
+          else { continue }
+
+          total += (glyph.x * glyph.x + glyph.y * glyph.y).squareRoot()
+          count += 1
+        }
+      }
+
+      return count == 0 ? 0 : total / Double(count)
+    }
+
+    let narrow = meanRadius(spread: 0.55)
+    let standard = meanRadius(spread: 0.82)
+    let wide = meanRadius(spread: 1.10)
+
+    #expect(narrow < standard)
+    #expect(standard < wide)
+  }
+
   @Test("The silhouette contracts across the sequence")
   func silhouetteContracts() throws {
     // Measured from the originals: width and alpha mass fall monotonically,
@@ -2410,6 +2480,7 @@ struct PoofRenderingTests {
     reducesMotion: Bool = false,
     reducesTransparency: Bool = false,
     particleCount: Int = 28,
+    spread: Double = 0.82,
     width: Double = 84,
     height: Double = 84,
     renderScale: Double = 1,
@@ -2418,6 +2489,7 @@ struct PoofRenderingTests {
   ) -> PixelSnapshot? {
     let configuration = PoofConfiguration(
       particleCount: particleCount,
+      spread: spread,
       seed: 0x504F_4F46
     )
     let content = PoofCanvas(

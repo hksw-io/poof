@@ -27,6 +27,32 @@ struct PoofLayoutTests {
     #expect(size.height == 480)
   }
 
+  @Test("Overscan pads the canvas without scaling the artwork")
+  func fieldScalePadsWithoutScaling() {
+    let size = CGSize(width: 84, height: 84)
+    let artSide = PoofLayout.artSide(for: size)
+    var sides: [CGFloat] = []
+
+    for fieldScale in [1.5, 2.1, 3.0] {
+      // The reference dimension the artwork is drawn against must not move.
+      #expect(PoofLayout.artSide(for: size) == artSide)
+
+      let canvas = PoofLayout.canvasSize(
+        for: size,
+        fieldScale: fieldScale,
+        coversSource: false
+      )
+
+      #expect(canvas.width == artSide * CGFloat(fieldScale))
+      #expect(canvas.height == canvas.width)
+      sides.append(canvas.width)
+    }
+
+    // Only the transparent overscan grows.
+    #expect(sides[0] < sides[1])
+    #expect(sides[1] < sides[2])
+  }
+
   @Test("Invalid geometry remains finite")
   func invalidGeometry() {
     let side = PoofLayout.fieldSide(
