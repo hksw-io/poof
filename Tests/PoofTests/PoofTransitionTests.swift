@@ -176,39 +176,49 @@ struct PoofTransitionTests {
     }
   }
 
-  @Test("Progressive source retires at the fully covering pose")
-  func progressiveSourceMask() {
-    let rect = CGRect(x: 0, y: 0, width: 84, height: 84)
+  @Test("Progressive removal eats the source from the smoke outward")
+  func progressiveSourceErosion() throws {
+    let size = CGSize(width: 84, height: 84)
+    let rect = CGRect(origin: .zero, size: size)
     let frameSet = PoofSimulation.makeFrameSet(
       configuration: PoofConfiguration(seed: 1),
       variationSeed: 1
     )
-
-    #expect(
-      !PoofArtwork.sourceMaskPath(for: .cloud, in: rect).isEmpty
-    )
-    #expect(
-      !PoofArtwork.sourceMaskPath(for: .clusters, in: rect).isEmpty
+    let erosion = try #require(
+      PoofSourceErosion.stepped(size: size, frameSet: frameSet)
     )
 
-    for pose in [PoofPose.puffs, .wisps, .ringlets] {
-      #expect(PoofArtwork.sourceMaskPath(for: pose, in: rect).isEmpty)
+    func visibleArea(atProgress progress: Double) -> Int {
+      let path = erosion.path(for: progress, in: rect)
+      var count = 0
+
+      for row in stride(from: 0.5, to: size.height, by: 1) {
+        for column in stride(from: 0.5, to: size.width, by: 1) {
+          if path.contains(CGPoint(x: column, y: row)) {
+            count += 1
+          }
+        }
+      }
+
+      return count
     }
 
-    #expect(
-      !PoofSourceMask(
-        progress: 0.499_999,
-        motion: .smooth,
-        frameSet: frameSet
-      ).path(in: rect).isEmpty
-    )
-    #expect(
-      PoofSourceMask(
-        progress: 0.5,
-        motion: .smooth,
-        frameSet: frameSet
-      ).path(in: rect).isEmpty
-    )
+    let whole = Int(size.width * size.height)
+    let cloud = visibleArea(atProgress: 0.10)
+    let clusters = visibleArea(atProgress: 0.30)
+
+    // The source survives where smoke has not reached, which is what makes
+    // this consumption rather than a lid dropped over the top.
+    #expect(cloud > 0)
+    #expect(cloud < whole)
+    // A bite once taken is never given back.
+    #expect(clusters < cloud)
+    // The dense pose is proven to tile the bounds, so nothing is left.
+    #expect(visibleArea(atProgress: 0.50) == 0)
+    #expect(visibleArea(atProgress: 0.90) == 0)
+
+    #expect(erosion.path(for: 0, in: rect) == Path(rect))
+    #expect(erosion.path(for: 1, in: rect).isEmpty)
   }
 
   @Test("Reduce Motion replaces spatial removal with a bounded fade")

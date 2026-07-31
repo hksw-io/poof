@@ -138,7 +138,7 @@ struct PoofRenderingTests {
     }
   }
 
-  @Test("Progressive removal keeps the source whole until smoke covers it")
+  @Test("Progressive removal eats the source from the smoke outward")
   func progressiveRemovalWaitsForCoverage() throws {
     let progresses = [0.10, 0.30, 0.50, 0.70, 0.90]
 
@@ -150,14 +150,25 @@ struct PoofRenderingTests {
         )
       )
       let full = images[0]
-      for image in images[1...2] {
-        #expect(image.normalizedDifference(from: full) < 0.005)
-        #expect(image.sourceBlueConnectedComponentCount == 1)
-      }
+      let whole = Double(full.sourceBluePixelCount)
+
+      #expect(whole > 0)
+
+      // The source is consumed where the smoke has arrived rather than hidden
+      // behind it, so the opening poses take real bites out of it. Fragmenting
+      // into several islands is the intended look, not a regression.
+      let opening = Double(images[1].sourceBluePixelCount)
+      let dense = Double(images[2].sourceBluePixelCount)
+
+      #expect((0.40...0.95).contains(opening / whole))
+      #expect((0.005...0.60).contains(dense / whole))
+      #expect(dense < opening)
+
       for image in images[3...5] {
         #expect(image.statistics.alphaTotal == 0)
       }
 
+      // Nothing eaten is ever handed back.
       for (previous, current) in zip(images, images.dropFirst()) {
         #expect(current.alphaExcessPixelCount(over: previous) <= 8)
       }
@@ -1142,15 +1153,17 @@ struct PoofRenderingTests {
       configuration: PoofConfiguration(seed: 0x504F_4F46),
       variationSeed: 0x504F_4F46
     )
+    let erosion = PoofSourceErosion.stepped(
+      size: CGSize(width: 84, height: 84),
+      frameSet: frameSet
+    )
     let firstPath = PoofSourceMask(
       progress: 0,
-      motion: .stepped,
-      frameSet: frameSet
+      erosion: erosion
     ).path(in: CGRect(x: 0, y: 0, width: 84, height: 84))
     let lastPath = PoofSourceMask(
       progress: 1,
-      motion: .stepped,
-      frameSet: frameSet
+      erosion: erosion
     ).path(in: CGRect(x: 0, y: 0, width: 84, height: 84))
 
     #expect(firstPath.contains(CGPoint(x: 42, y: 42)))
@@ -1213,48 +1226,74 @@ struct PoofRenderingTests {
     }
   }
 
-  @Test("Progressive source masks are stable across playback seeds")
-  func progressiveRemovalSeedIndependence() {
-    let rect = CGRect(x: 0, y: 0, width: 84, height: 84)
-    let progresses = [0.0, 0.10, 0.30, 0.50, 0.70, 0.90, 1.0]
+  @Test("Progressive erosion repeats for a seed and varies between seeds")
+  func progressiveRemovalSeedRepeatability() throws {
+    let size = CGSize(width: 84, height: 84)
+    let rect = CGRect(origin: .zero, size: size)
+    let progresses = [0.10, 0.30]
+
+    func erosion(
+      style: PoofStyle,
+      seed: UInt64
+    ) throws -> PoofSourceErosion {
+      try #require(
+        PoofSourceErosion.stepped(
+          size: size,
+          frameSet: PoofSimulation.makeFrameSet(
+            configuration: PoofConfiguration(seed: seed),
+            style: style,
+            variationSeed: seed
+          )
+        )
+      )
+    }
+
+    func eatenArea(_ erosion: PoofSourceErosion, at progress: Double) -> Int {
+      let path = erosion.path(for: progress, in: rect)
+      var count = 0
+
+      for row in stride(from: 0.5, to: size.height, by: 1) {
+        for column in stride(from: 0.5, to: size.width, by: 1) {
+          if !path.contains(CGPoint(x: column, y: row)) {
+            count += 1
+          }
+        }
+      }
+
+      return count
+    }
 
     for style in allPoofStyles {
-      let firstFrameSet = PoofSimulation.makeFrameSet(
-        configuration: PoofConfiguration(seed: 0x1111),
-        style: style,
-        variationSeed: 0x1111
-      )
-      let repeatedFrameSet = PoofSimulation.makeFrameSet(
-        configuration: PoofConfiguration(seed: 0x1111),
-        style: style,
-        variationSeed: 0x1111
-      )
-      let variedFrameSet = PoofSimulation.makeFrameSet(
-        configuration: PoofConfiguration(seed: 0x2222),
-        style: style,
-        variationSeed: 0x2222
-      )
+      let first = try erosion(style: style, seed: 0x1111)
+      let repeated = try erosion(style: style, seed: 0x1111)
+      let varied = try erosion(style: style, seed: 0x2222)
+      var differs = false
 
       for progress in progresses {
-        let first = PoofSourceMask(
-          progress: progress,
-          motion: .stepped,
-          frameSet: firstFrameSet
-        ).path(in: rect)
-        let repeated = PoofSourceMask(
-          progress: progress,
-          motion: .stepped,
-          frameSet: repeatedFrameSet
-        ).path(in: rect)
-        let varied = PoofSourceMask(
-          progress: progress,
-          motion: .stepped,
-          frameSet: variedFrameSet
-        ).path(in: rect)
+        #expect(
+          first.path(for: progress, in: rect)
+            == repeated.path(for: progress, in: rect)
+        )
 
-        #expect(first == repeated)
-        #expect(first == varied)
+        if first.path(for: progress, in: rect)
+          != varied.path(for: progress, in: rect)
+        {
+          differs = true
+        }
+
+        // The mask follows seeded smoke now, so it is not seed-independent.
+        // What has to hold is that every seed eats at a comparable rate.
+        let firstArea = Double(eatenArea(first, at: progress))
+        let variedArea = Double(eatenArea(varied, at: progress))
+
+        #expect(firstArea > 0)
+        #expect(
+          abs(firstArea - variedArea) <= firstArea * 0.35,
+          "\(style) at \(progress): \(firstArea) vs \(variedArea)"
+        )
       }
+
+      #expect(differs, "\(style): every seed ate exactly the same shape")
     }
   }
 
@@ -2596,7 +2635,13 @@ private struct ContentRemovalStrip: View {
               contentRemoval: .progressive,
               motion: motion,
               reducesMotion: reducesMotion,
-              frameSet: frameSet
+              frameSet: frameSet,
+              erosion: frameSet.flatMap {
+                PoofSourceErosion.stepped(
+                  size: CGSize(width: width, height: height),
+                  frameSet: $0
+                )
+              }
             )
           )
       }
@@ -2635,7 +2680,11 @@ private struct ProgressiveTransitionStrip: View {
               contentRemoval: .progressive,
               motion: motion,
               reducesMotion: false,
-              frameSet: frameSet
+              frameSet: frameSet,
+              erosion: PoofSourceErosion.stepped(
+                size: CGSize(width: width, height: height),
+                frameSet: frameSet
+              )
             )
           )
           .overlay {

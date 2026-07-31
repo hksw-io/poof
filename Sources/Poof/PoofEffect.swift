@@ -663,7 +663,10 @@ enum PoofArtwork {
     let outlineWidth = max(0.5, artSide * 0.014)
     let coverOutlineWidth = max(0.4, outlineWidth * 0.72)
     // A wider opaque underpaint closes source-edge seams; the dark contour is
-    // drawn immediately afterward to keep neighboring puffs legible.
+    // drawn immediately afterward to keep neighboring puffs legible. This
+    // width is also what makes the dense pose provably tile the source, which
+    // is what lets the erosion retire it outright. Narrowing it breaks that
+    // proof: coverage already fails at 4.0.
     return coverOutlineWidth * 4.5
   }
 
@@ -845,18 +848,6 @@ enum PoofArtwork {
     return Array(
       frameSet.blends(for: sample).prefix(maximumRenderedElementCount)
     )
-  }
-
-  static func sourceMaskPath(
-    for pose: PoofPose,
-    in rect: CGRect
-  ) -> Path {
-    switch pose {
-    case .cloud, .clusters:
-      Path(rect)
-    case .puffs, .wisps, .ringlets:
-      Path()
-    }
   }
 
   static func sourceCoverPath(

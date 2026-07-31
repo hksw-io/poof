@@ -168,7 +168,9 @@ private struct AdaptivePoofModifier: ViewModifier {
   private var reducesTransparency
   @Environment(\.colorSchemeContrast) private var colorSchemeContrast
   @State private var frameSet: PoofFrameSet? = nil
-  @State private var sourceCoverAspect: PoofSourceCoverAspect? = nil
+  @State private var sourceSize: CGSize? = nil
+  @State private var erosion: PoofSourceErosion? = nil
+  @State private var preparedInput: PoofPreparationInput? = nil
   @State private var playbackSeed: UInt64? = nil
 
   let progress: Double
@@ -189,7 +191,7 @@ private struct AdaptivePoofModifier: ViewModifier {
       coversSource: coversSource,
       sourceCoverAspect:
         coversSource
-        ? sourceCoverAspect
+        ? sourceSize.map(PoofSourceCoverAspect.init(size:))
         : nil
     )
 
@@ -207,7 +209,8 @@ private struct AdaptivePoofModifier: ViewModifier {
         reducesMotion: reducesMotion,
         reducesTransparency: reducesTransparency,
         isRemoving: isRemoving,
-        frameSet: frameSet
+        frameSet: frameSet,
+        erosion: erosion
       )
     )
     .onChange(of: input, initial: true) { _, input in
@@ -219,41 +222,56 @@ private struct AdaptivePoofModifier: ViewModifier {
 
       frameSet = makeFrameSet(for: input)
     }
-    .task(id: input) {
-      // The covered layout solves for coverage over the laid-out bounds. It
-      // runs at appearance rather than at removal, because deferring it to the
-      // poof would stall the first animated frame, but it runs off the main
-      // thread so a list of rows does not serialize on it.
+    .task(id: PoofPreparationInput(playback: input, sourceSize: sourceSize)) {
+      // The covered layout solves for coverage over the laid-out bounds, and
+      // the erosion solves what the smoke eats out of them. Both run at
+      // appearance rather than at removal, because deferring them to the poof
+      // would stall its first frame, and both run off the main thread so a
+      // list of rows does not serialize on them.
+      let preparation = PoofPreparationInput(
+        playback: input,
+        sourceSize: sourceSize
+      )
+
       guard
         input.coversSource,
         input.sourceCoverAspect != nil,
-        needsFrameSet(for: input)
+        let size = sourceSize,
+        preparedInput != preparation
       else {
         return
       }
 
       let seed = resolvedPlaybackSeed(for: input.configuration)
       playbackSeed = seed
+      preparedInput = preparation
       let prepared = await Task.detached(priority: .userInitiated) {
-        PoofSimulation.makeFrameSet(
+        let frameSet = PoofSimulation.makeFrameSet(
           configuration: input.configuration,
           style: input.style,
           coversSource: input.coversSource,
           sourceCoverAspect: input.sourceCoverAspect,
           variationSeed: seed
         )
+        let erosion = PoofSourceErosion.stepped(
+          size: size,
+          frameSet: frameSet
+        )
+
+        return (frameSet, erosion)
       }.value
 
       guard !Task.isCancelled else {
         return
       }
 
-      frameSet = prepared
+      frameSet = prepared.0
+      erosion = prepared.1
     }
-    .onGeometryChange(for: PoofSourceCoverAspect.self) { proxy in
-      PoofSourceCoverAspect(size: proxy.size)
-    } action: { newAspect in
-      sourceCoverAspect = newAspect
+    .onGeometryChange(for: CGSize.self) { proxy in
+      proxy.size
+    } action: { newSize in
+      sourceSize = newSize
     }
   }
 
@@ -289,6 +307,15 @@ private struct AdaptivePoofModifier: ViewModifier {
   }
 }
 
+/// Everything a covered playback is prepared against.
+///
+/// The erosion is solved for exact bounds rather than an aspect class, so a
+/// resize inside one class still has to rebuild it.
+struct PoofPreparationInput: Equatable, Sendable {
+  let playback: PoofPlaybackInput
+  let sourceSize: CGSize?
+}
+
 enum PoofPlaybackSeed {
   /// The seed one playback keeps for its whole life.
   ///
@@ -315,6 +342,7 @@ private struct PoofProgressModifier: ViewModifier {
   @AnimatableIgnored var reducesTransparency: Bool
   @AnimatableIgnored var isRemoving: Bool
   @AnimatableIgnored var frameSet: PoofFrameSet?
+  @AnimatableIgnored var erosion: PoofSourceErosion?
 
   func body(content: Content) -> some View {
     content
@@ -324,7 +352,8 @@ private struct PoofProgressModifier: ViewModifier {
           contentRemoval: contentRemoval,
           motion: motion,
           reducesMotion: reducesMotion,
-          frameSet: frameSet
+          frameSet: frameSet,
+          erosion: erosion
         )
       )
       .allowsHitTesting(!isRemoving)
@@ -371,6 +400,7 @@ struct PoofContentRemovalModifier: ViewModifier {
   let motion: PoofMotion
   let reducesMotion: Bool
   let frameSet: PoofFrameSet?
+  var erosion: PoofSourceErosion? = nil
 
   @ViewBuilder
   func body(content: Content) -> some View {
@@ -393,8 +423,7 @@ struct PoofContentRemovalModifier: ViewModifier {
         .mask {
           PoofSourceMask(
             progress: maskProgress,
-            motion: motion,
-            frameSet: frameSet
+            erosion: frameSet == nil ? nil : erosion
           )
           .fill(.black)
           .opacity(resolvedOpacity)
@@ -423,8 +452,7 @@ struct PoofContentRemovalModifier: ViewModifier {
 
 struct PoofSourceMask: Shape {
   let progress: Double
-  let motion: PoofMotion
-  let frameSet: PoofFrameSet?
+  let erosion: PoofSourceErosion?
 
   func path(in rect: CGRect) -> Path {
     guard progress.isNaN == false, progress > 0 else {
@@ -435,25 +463,12 @@ struct PoofSourceMask: Shape {
       return Path()
     }
 
-    guard
-      frameSet != nil
-    else {
+    guard let erosion else {
       // Keep the source present if the precomputed playback is not ready yet.
       return Path(rect)
     }
 
-    if motion == .smooth {
-      return progress < 0.5 ? Path(rect) : Path()
-    }
-
-    guard let pose = PoofSimulation.pose(for: progress) else {
-      return Path(rect)
-    }
-
-    return PoofArtwork.sourceMaskPath(
-      for: pose,
-      in: rect
-    )
+    return erosion.path(for: progress, in: rect)
   }
 }
 
