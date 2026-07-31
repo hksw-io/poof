@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 - 2026-07-31
 
 ### Changed
 
@@ -42,6 +42,13 @@
   faster, so a list of rows no longer serializes on it.
 - Fixes the media generator failing to resolve outside a directory named
   `poof`, which broke `make check` for release tarballs.
+- Writes documentation stills from the rendered image rather than decoding
+  them back out of the GIF, which had reduced them to as few as 81 colors.
+- Ships the demo's localized strings, which never reached its resource bundle,
+  and routes six status labels through it instead of `Bundle.main`.
+- Stops the demo's button label cross-fading for the whole playback, and
+  enables the Motion picker outside playback, where it still changes what the
+  static poses draw.
 
 ## 1.1.0 - 2026-07-31
 

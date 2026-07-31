@@ -13,10 +13,15 @@ later.
 - Use current SwiftUI APIs. Do not add deprecated AppKit animation APIs,
   private frameworks, UIKit effects, Core Animation emitters, or timers.
 - Preserve the clean-room five-pose sequence: full cloud, four clusters, dense
-  puffs, sparse wisps, then ringlets. Swap poses without interpolation at 15
-  frames per second; one playback lasts exactly one-third of a second.
+  puffs, sparse wisps, then ringlets. Stepped motion swaps poses without
+  interpolation at 15 frames per second and lasts exactly one-third of a
+  second. It is the default and the faithful recreation. Smooth motion is a
+  continuous plume rather than those poses interpolated, and may run to its own
+  duration.
 - Keep `PoofSimulation` based on absolute normalized progress. Progress and the
-  playback seed must fully determine the selected pose and its glyphs.
+  playback seed must fully determine the selected pose and its glyphs. A plume
+  particle's whole trajectory is a closed form in progress, seed, and index;
+  nothing integrates and nothing carries state between frames.
 - Choose optional variation once per playback and apply it coherently to every
   pose. An explicit seed must produce repeatable output. Do not add per-frame
   random generation, `hashValue` seeds, or mutable global state.
@@ -27,15 +32,22 @@ later.
   reference dimension capped at 160 points unless measurements and tests
   justify a change.
 - Keep insertion quiet. The poof is a removal effect.
-- Progressive removal must keep the source intact through the dense poses,
-  carry covered pixels forward between pose swaps, and remove the source only
-  after the puffs cover its bounds.
+- Progressive removal consumes the source where smoke reaches it rather than
+  hiding it behind opaque paint. Bites accumulate, so covered pixels carry
+  forward by construction and a bite is never given back. The source is gone
+  only once the dense pose covers its bounds.
 - Preserve the accessibility paths: Reduce Motion draws no spatial poses;
   Reduce Transparency removes the blurred shadow; Increased Contrast uses
   stronger outlines and detail marks.
-- Keep Classic, Snap, and Drift grayscale. Bloom may use stable pastel fills.
-  Use the same palette in light and dark appearance, with dark outlines and
-  neutral details.
+- Keep Classic and Snap grayscale. Bloom may use stable pastel fills. Use the
+  same palette in light and dark appearance, with dark outlines and neutral
+  details.
+- Draw Classic with puffs only, in both stepped and smooth motion. Every frame
+  of the original is a bumpy multi-lobe puff; rings, curls, and flecks belong
+  to Bloom and Snap. Size carries the dissipation.
+- Fit the artwork to the canvas it is given. The originals run off their own
+  tile; this recreation does not, so ink that reaches past the geometry is
+  budgeted rather than assumed.
 - Keep the drawing canvas hidden from accessibility and hit testing. A view
   being removed must not remain interactive or exposed to accessibility.
 - Do not call private APIs, extract system artwork, copy system sounds, or add
@@ -47,6 +59,14 @@ later.
 - `Sources/Poof/PoofConfiguration.swift`: public density, reach, padding, and
   playback seed settings.
 - `Sources/Poof/PoofStyle.swift`: public opt-in visual styles.
+- `Sources/Poof/PoofMotion.swift`: public stepped and smooth motion.
+- `Sources/Poof/PoofPalette.swift`: public fill palettes.
+- `Sources/Poof/PoofNoise.swift`: counter-based seeded noise shared by the
+  simulation, the plume, and the erosion.
+- `Sources/Poof/PoofPlume.swift`: closed-form continuous smoke for smooth
+  motion.
+- `Sources/Poof/PoofErosion.swift`: the cumulative bites progressive removal
+  takes out of the source.
 - `Sources/Poof/PoofSimulation.swift`: pose selection, seeded breakup
   descriptors, and glyph variation.
 - `Sources/Poof/PoofEffect.swift`: vector paths, palette, and `Canvas`

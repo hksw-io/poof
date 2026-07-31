@@ -28,8 +28,8 @@ the deprecated `NSAnimationEffect` API or ship copied system assets.
 </table>
 
 By default, the animation swaps through five drawn poses at 15 frames per
-second. Smooth interpolation is available when the hard pose changes don't fit
-the interaction. Either mode takes one-third of a second.
+second, one-third of a second in all. Continuous motion is available when the
+hard pose changes don't fit the interaction.
 
 ## Requirements
 
@@ -45,13 +45,13 @@ In Xcode, choose **File → Add Package Dependencies** and enter:
 https://github.com/hksw-io/poof.git
 ```
 
-Set the dependency rule to **Up to Next Major Version** starting at `1.1.0`.
+Set the dependency rule to **Up to Next Major Version** starting at `1.2.0`.
 
 From the root of another Swift package, SwiftPM can add Poof and link its
 library product to a target:
 
 ```sh
-swift package add-dependency https://github.com/hksw-io/poof.git --from 1.1.0
+swift package add-dependency https://github.com/hksw-io/poof.git --from 1.2.0
 swift package add-target-dependency Poof YourTarget --package poof
 ```
 
@@ -63,7 +63,7 @@ For a package manifest, add the package and product dependency:
 dependencies: [
   .package(
     url: "https://github.com/hksw-io/poof.git",
-    from: "1.1.0"
+    from: "1.2.0"
   )
 ],
 targets: [
@@ -167,10 +167,24 @@ RoundedRectangle(cornerRadius: 16)
 Color is always opt-in through `.pastel` or `PoofPalette(colors:)`.
 
 `PoofMotion.stepped` preserves the five hard pose changes at 15 frames per
-second. `.smooth` gives each puff one contour and fill for the full playback,
-moves it along a continuous path, and scales it in or out at a staggered,
-playback-seeded moment. It does not fade or swap puffs mid-flight. Motion choice
-does not change the playback duration.
+second. It is the recreation of the original and the default.
+
+`.smooth` is not those poses interpolated. Each puff is born at its own moment,
+travels its own path, expands as it goes, and thins away rather than shrinking
+out; the poses only decide where puffs start, how large they begin, and in what
+order they arrive. Because continuous smoke spends its last moments thinning,
+`.smooth` reads as clipped at one-third of a second. Pair it with
+`Animation.poof(motion:)` to give it the longer timing it wants, or
+`Animation.poof(duration:)` to choose your own:
+
+```swift
+withAnimation(.poof(motion: .smooth)) {
+  isVisible = false
+}
+```
+
+Bare `.poof` keeps the original one-third-second timing whichever motion you
+pick.
 
 ### Options at a glance
 
