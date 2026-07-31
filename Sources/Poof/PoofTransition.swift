@@ -169,6 +169,7 @@ private struct AdaptivePoofModifier: ViewModifier {
   @Environment(\.colorSchemeContrast) private var colorSchemeContrast
   @State private var frameSet: PoofFrameSet? = nil
   @State private var sourceCoverAspect: PoofSourceCoverAspect? = nil
+  @State private var playbackSeed: UInt64? = nil
 
   let progress: Double
   let isRemoving: Bool
@@ -210,31 +211,95 @@ private struct AdaptivePoofModifier: ViewModifier {
       )
     )
     .onChange(of: input, initial: true) { _, input in
-      guard !input.coversSource || input.sourceCoverAspect != nil else {
+      // The uncovered layout is cheap, and PoofEffect and ImageRenderer need
+      // it before the first draw, so it stays synchronous.
+      guard !input.coversSource, needsFrameSet(for: input) else {
         return
       }
 
+      frameSet = makeFrameSet(for: input)
+    }
+    .task(id: input) {
+      // The covered layout solves for coverage over the laid-out bounds. It
+      // runs at appearance rather than at removal, because deferring it to the
+      // poof would stall the first animated frame, but it runs off the main
+      // thread so a list of rows does not serialize on it.
       guard
-        frameSet?.configuration != input.configuration
-          || frameSet?.style != input.style
-          || frameSet?.coversSource != input.coversSource
-          || frameSet?.sourceCoverAspect != input.sourceCoverAspect
+        input.coversSource,
+        input.sourceCoverAspect != nil,
+        needsFrameSet(for: input)
       else {
         return
       }
 
-      frameSet = PoofPlayback.makeFrameSet(
-        for: input.configuration,
-        style: input.style,
-        coversSource: input.coversSource,
-        sourceCoverAspect: input.sourceCoverAspect
-      )
+      let seed = resolvedPlaybackSeed(for: input.configuration)
+      playbackSeed = seed
+      let prepared = await Task.detached(priority: .userInitiated) {
+        PoofSimulation.makeFrameSet(
+          configuration: input.configuration,
+          style: input.style,
+          coversSource: input.coversSource,
+          sourceCoverAspect: input.sourceCoverAspect,
+          variationSeed: seed
+        )
+      }.value
+
+      guard !Task.isCancelled else {
+        return
+      }
+
+      frameSet = prepared
     }
     .onGeometryChange(for: PoofSourceCoverAspect.self) { proxy in
       PoofSourceCoverAspect(size: proxy.size)
     } action: { newAspect in
       sourceCoverAspect = newAspect
     }
+  }
+
+  private func needsFrameSet(for input: PoofPlaybackInput) -> Bool {
+    frameSet?.configuration != input.configuration
+      || frameSet?.style != input.style
+      || frameSet?.coversSource != input.coversSource
+      || frameSet?.sourceCoverAspect != input.sourceCoverAspect
+  }
+
+  private func makeFrameSet(
+    for input: PoofPlaybackInput
+  ) -> PoofFrameSet {
+    let seed = resolvedPlaybackSeed(for: input.configuration)
+    playbackSeed = seed
+
+    return PoofSimulation.makeFrameSet(
+      configuration: input.configuration,
+      style: input.style,
+      coversSource: input.coversSource,
+      sourceCoverAspect: input.sourceCoverAspect,
+      variationSeed: seed
+    )
+  }
+
+  private func resolvedPlaybackSeed(
+    for configuration: PoofConfiguration
+  ) -> UInt64 {
+    PoofPlaybackSeed.resolve(
+      configuration: configuration,
+      cached: playbackSeed
+    )
+  }
+}
+
+enum PoofPlaybackSeed {
+  /// The seed one playback keeps for its whole life.
+  ///
+  /// A rebuild triggered by a resize must not re-roll the variation, or the
+  /// poof silently becomes a different poof between one frame and the next.
+  static func resolve(
+    configuration: PoofConfiguration,
+    cached: UInt64?,
+    randomSeed: () -> UInt64 = { UInt64.random(in: 1...UInt64.max) }
+  ) -> UInt64 {
+    configuration.seed ?? cached ?? randomSeed()
   }
 }
 
@@ -274,7 +339,10 @@ private struct PoofProgressModifier: ViewModifier {
           )
 
           PoofCanvas(
-            progress: progress,
+            progress: PoofSimulation.drawnProgress(
+              for: progress,
+              motion: motion
+            ),
             palette: palette,
             motion: motion,
             reducesMotion: reducesMotion,

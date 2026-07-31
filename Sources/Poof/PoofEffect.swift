@@ -154,7 +154,7 @@ struct PoofPlayback: View {
   }
 }
 
-struct PoofPlaybackInput: Equatable {
+struct PoofPlaybackInput: Equatable, Sendable {
   let style: PoofStyle
   let configuration: PoofConfiguration
   let coversSource: Bool
@@ -1093,21 +1093,21 @@ enum PoofArtwork {
     height: Double,
     rotation: Double
   ) -> Path {
+    // Compose scale, rotation, and translation into one matrix. Chaining
+    // `applying` walks and reallocates the element list once per step, and
+    // this is the hottest per-glyph call in the renderer.
     Self.unitPath(for: contour)
       .applying(
-        CGAffineTransform(
-          scaleX: width,
-          y: height
-        )
-      )
-      .applying(
-        CGAffineTransform(rotationAngle: rotation)
-      )
-      .applying(
-        CGAffineTransform(
-          translationX: center.x,
-          y: center.y
-        )
+        CGAffineTransform(scaleX: width, y: height)
+          .concatenating(
+            CGAffineTransform(rotationAngle: rotation)
+          )
+          .concatenating(
+            CGAffineTransform(
+              translationX: center.x,
+              y: center.y
+            )
+          )
       )
   }
 

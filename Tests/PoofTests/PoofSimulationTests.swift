@@ -3,8 +3,266 @@ import Testing
 
 @testable import Poof
 
+/// The reference source sizes the cover layouts are authored against.
+private let sourceCoverReferenceSizes: [(width: Double, height: Double)] = [
+  (84, 84),
+  (132, 48),
+  (48, 132),
+]
+
+private func sourceCoverArtSide(
+  width: Double,
+  height: Double
+) -> Double {
+  min(max((width * height).squareRoot(), 42), 160)
+}
+
+/// The coverage gap search before it learned to stop scanning discs that
+/// cannot change the answer. Kept here so the optimization is checked against
+/// behavior rather than against recorded numbers, which would pin the result
+/// to one architecture.
+private func exhaustiveLargestSourceCoverGap(
+  among glyphs: ArraySlice<PoofSourceCoverGlyph>,
+  seed: UInt64,
+  key: UInt64,
+  sourceWidth: Double,
+  sourceHeight: Double,
+  artSide: Double
+) -> (x: Double, y: Double) {
+  let cellSide = max(artSide * 0.02, 1)
+  let columnCount = max(Int(ceil(sourceWidth / cellSide)), 1)
+  let rowCount = max(Int(ceil(sourceHeight / cellSide)), 1)
+  let cellWidth = sourceWidth / Double(columnCount)
+  let cellHeight = sourceHeight / Double(rowCount)
+  let discs = glyphs.map { glyph in
+    (
+      x: sourceWidth * glyph.x,
+      y: sourceHeight * glyph.y,
+      radius:
+        min(
+          sourceWidth * glyph.width,
+          sourceHeight * glyph.height
+        ) * 0.30
+    )
+  }
+  var largestGap = (x: 0.0, y: 0.0)
+  var largestDeficit = -Double.infinity
+
+  for row in 0..<rowCount {
+    for column in 0..<columnCount {
+      let cellKey = key + UInt64(row * columnCount + column) * 0x10
+      let point = (
+        x:
+          -sourceWidth / 2
+          + (Double(column)
+            + PoofSimulation.coverUnitNoise(
+              seed: seed,
+              key: cellKey + 1,
+              in: 0.28...0.72
+            )) * cellWidth,
+        y:
+          -sourceHeight / 2
+          + (Double(row)
+            + PoofSimulation.coverUnitNoise(
+              seed: seed,
+              key: cellKey + 2,
+              in: 0.28...0.72
+            )) * cellHeight
+      )
+      var deficit = Double.infinity
+
+      for disc in discs {
+        deficit = min(
+          deficit,
+          hypot(point.x - disc.x, point.y - disc.y) - disc.radius
+        )
+      }
+
+      let score =
+        deficit
+        * PoofSimulation.coverUnitNoise(
+          seed: seed,
+          key: cellKey + 3,
+          in: 0.96...1.04
+        )
+
+      if score > largestDeficit {
+        largestGap = point
+        largestDeficit = score
+      }
+    }
+  }
+
+  return largestGap
+}
+
+/// The nearest-glyph scan before it was folded into a single pass.
+private func exhaustiveSizedSourceCoverGlyphs(
+  _ glyphs: [PoofSourceCoverGlyph],
+  coverageCount: Int,
+  sourceWidth: Double,
+  sourceHeight: Double,
+  artSide: Double
+) -> [Double] {
+  let cellSide = max(artSide * 0.02, 1)
+  let columnCount = max(Int(ceil(sourceWidth / cellSide)), 1)
+  let rowCount = max(Int(ceil(sourceHeight / cellSide)), 1)
+  let cellWidth = sourceWidth / Double(columnCount)
+  let cellHeight = sourceHeight / Double(rowCount)
+  let halfCellDiagonal = hypot(cellWidth, cellHeight) / 2
+  var requiredRadii = [Double](repeating: 0, count: glyphs.count)
+
+  for row in 0..<rowCount {
+    for column in 0..<columnCount {
+      let cellCenterX =
+        -sourceWidth / 2 + (Double(column) + 0.5) * cellWidth
+      let cellCenterY =
+        -sourceHeight / 2 + (Double(row) + 0.5) * cellHeight
+      let nearestIndex =
+        (0..<coverageCount).min {
+          let first = glyphs[$0]
+          let second = glyphs[$1]
+          return hypot(
+            cellCenterX - sourceWidth * first.x,
+            cellCenterY - sourceHeight * first.y
+          )
+            < hypot(
+              cellCenterX - sourceWidth * second.x,
+              cellCenterY - sourceHeight * second.y
+            )
+        } ?? 0
+      let glyph = glyphs[nearestIndex]
+      let farthestDistance =
+        hypot(
+          cellCenterX - sourceWidth * glyph.x,
+          cellCenterY - sourceHeight * glyph.y
+        )
+        + halfCellDiagonal
+
+      requiredRadii[nearestIndex] = max(
+        requiredRadii[nearestIndex],
+        farthestDistance
+      )
+    }
+  }
+
+  return requiredRadii
+}
+
 @Suite("Poof simulation")
 struct PoofSimulationTests {
+  @Test("The pruned coverage gap search matches an exhaustive scan")
+  func largestSourceCoverGapMatchesExhaustiveScan() {
+    for profile in 0..<PoofSimulation.sourceCoverGeometryProfileCount {
+      let seed = UInt64(profile)
+
+      for size in sourceCoverReferenceSizes {
+        let aspect = PoofSourceCoverAspect(
+          size: CGSize(width: size.width, height: size.height)
+        )
+        let frameSet = PoofSimulation.makeFrameSet(
+          configuration: PoofConfiguration(seed: seed),
+          coversSource: true,
+          sourceCoverAspect: aspect,
+          variationSeed: seed
+        )
+        let glyphs = frameSet.sourceCoverGlyphs(for: aspect)
+
+        guard !glyphs.isEmpty else {
+          continue
+        }
+
+        let artSide = sourceCoverArtSide(
+          width: size.width,
+          height: size.height
+        )
+        let repairStart = PoofSourceCoverLayout.baseGlyphCount
+        let repairEnd =
+          repairStart + PoofSourceCoverLayout.repairGlyphCount
+
+        for prefix in repairStart..<min(repairEnd, glyphs.count) {
+          let key = UInt64(prefix) * 0x100
+          let pruned = PoofSimulation.largestSourceCoverGap(
+            among: glyphs.prefix(prefix),
+            seed: seed,
+            key: key,
+            sourceWidth: size.width,
+            sourceHeight: size.height,
+            artSide: artSide
+          )
+          let exhaustive = exhaustiveLargestSourceCoverGap(
+            among: glyphs.prefix(prefix),
+            seed: seed,
+            key: key,
+            sourceWidth: size.width,
+            sourceHeight: size.height,
+            artSide: artSide
+          )
+
+          #expect(
+            pruned.x == exhaustive.x && pruned.y == exhaustive.y,
+            """
+            profile \(profile), \(size.width)×\(size.height), \
+            prefix \(prefix): \(pruned) vs \(exhaustive)
+            """
+          )
+        }
+      }
+    }
+  }
+
+  @Test("The single-pass coverage sizing matches an exhaustive scan")
+  func sizedSourceCoverGlyphsMatchExhaustiveScan() {
+    for profile in 0..<PoofSimulation.sourceCoverGeometryProfileCount {
+      let seed = UInt64(profile)
+
+      for size in sourceCoverReferenceSizes {
+        let aspect = PoofSourceCoverAspect(
+          size: CGSize(width: size.width, height: size.height)
+        )
+        let frameSet = PoofSimulation.makeFrameSet(
+          configuration: PoofConfiguration(seed: seed),
+          coversSource: true,
+          sourceCoverAspect: aspect,
+          variationSeed: seed
+        )
+        let glyphs = frameSet.sourceCoverGlyphs(for: aspect)
+
+        guard !glyphs.isEmpty else {
+          continue
+        }
+
+        let artSide = sourceCoverArtSide(
+          width: size.width,
+          height: size.height
+        )
+        let coverageCount = min(
+          PoofSourceCoverLayout.openingGlyphCount,
+          glyphs.count
+        )
+        let radii = PoofSimulation.sourceCoverageRadii(
+          glyphs,
+          coverageCount: coverageCount,
+          sourceWidth: size.width,
+          sourceHeight: size.height,
+          artSide: artSide
+        )
+        let exhaustiveRadii = exhaustiveSizedSourceCoverGlyphs(
+          glyphs,
+          coverageCount: coverageCount,
+          sourceWidth: size.width,
+          sourceHeight: size.height,
+          artSide: artSide
+        )
+
+        #expect(
+          radii == exhaustiveRadii,
+          "profile \(profile), \(size.width)×\(size.height)"
+        )
+      }
+    }
+  }
+
   @Test("Five hard poses occupy consecutive progress intervals")
   func poseBoundaries() {
     let cases: [(progress: Double, expected: PoofPose?)] = [
@@ -730,8 +988,15 @@ struct PoofSimulationTests {
 
       for unusedAspect in PoofSourceCoverAspect.allCases
       where unusedAspect != aspect {
+        // Nothing is generated for the other aspects. Playback substitutes
+        // the built aspect rather than drawing nothing, so this asks the
+        // layout what it holds instead of what it would draw.
         #expect(
-          frameSet.sourceCoverGlyphs(for: unusedAspect).isEmpty
+          frameSet.storedSourceCoverGlyphs(for: unusedAspect).isEmpty
+        )
+        #expect(
+          frameSet.sourceCoverGlyphs(for: unusedAspect).count
+            == PoofSourceCoverLayout.glyphCount
         )
       }
     }

@@ -1677,8 +1677,8 @@ struct PoofRenderingTests {
       coveredFrameSet.sourceCoverGlyphs(for: .wide).count
         == PoofSourceCoverLayout.glyphCount
     )
-    #expect(coveredFrameSet.sourceCoverGlyphs(for: .square).isEmpty)
-    #expect(coveredFrameSet.sourceCoverGlyphs(for: .tall).isEmpty)
+    #expect(coveredFrameSet.storedSourceCoverGlyphs(for: .square).isEmpty)
+    #expect(coveredFrameSet.storedSourceCoverGlyphs(for: .tall).isEmpty)
   }
 
   @Test("Reduce Motion removes spatial drawing")

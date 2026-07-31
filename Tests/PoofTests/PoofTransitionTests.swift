@@ -6,6 +6,89 @@ import Testing
 @MainActor
 @Suite("Poof transition")
 struct PoofTransitionTests {
+  @Test("A playback keeps one seed across rebuilds")
+  func playbackSeedSurvivesRebuilds() {
+    var rolls = 0
+    let randomSeed: () -> UInt64 = {
+      rolls += 1
+      return 0xABCD
+    }
+    let unseeded = PoofConfiguration()
+
+    let first = PoofPlaybackSeed.resolve(
+      configuration: unseeded,
+      cached: nil,
+      randomSeed: randomSeed
+    )
+    // A resize rebuilds the layout. Re-rolling here would swap the poof for a
+    // different one between two frames of the same playback.
+    let second = PoofPlaybackSeed.resolve(
+      configuration: unseeded,
+      cached: first,
+      randomSeed: randomSeed
+    )
+
+    #expect(rolls == 1)
+    #expect(first == second)
+
+    let seeded = PoofConfiguration(seed: 0x504F_4F46)
+
+    #expect(
+      PoofPlaybackSeed.resolve(
+        configuration: seeded,
+        cached: nil,
+        randomSeed: randomSeed
+      ) == 0x504F_4F46
+    )
+    // An explicit seed outranks whatever a previous playback cached.
+    #expect(
+      PoofPlaybackSeed.resolve(
+        configuration: seeded,
+        cached: 0x1234,
+        randomSeed: randomSeed
+      ) == 0x504F_4F46
+    )
+    #expect(rolls == 1)
+  }
+
+  @Test("Stepped playback draws one progress per pose interval")
+  func steppedDrawnProgressCollapsesToPoses() {
+    let interiorSamples = stride(from: 0.01, through: 0.99, by: 0.01)
+    var drawn = Set<Double>()
+
+    for progress in interiorSamples {
+      let value = PoofSimulation.drawnProgress(
+        for: progress,
+        motion: .stepped
+      )
+
+      drawn.insert(value)
+      // Collapsing must not move a frame into a neighboring pose.
+      #expect(
+        PoofSimulation.pose(for: value)
+          == PoofSimulation.pose(for: progress)
+      )
+    }
+
+    #expect(drawn.count == PoofPose.allCases.count)
+
+    // Smooth playback needs every value it is given.
+    for progress in interiorSamples {
+      #expect(
+        PoofSimulation.drawnProgress(for: progress, motion: .smooth)
+          == progress
+      )
+    }
+
+    // Endpoints pass through so they stay transparent.
+    for endpoint in [0.0, 1.0, -1.0, 2.0] {
+      #expect(
+        PoofSimulation.drawnProgress(for: endpoint, motion: .stepped)
+          == endpoint
+      )
+    }
+  }
+
   @Test("Insertion stays quiet")
   func insertion() {
     let state = PoofTransition.state(for: .willAppear)

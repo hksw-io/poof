@@ -919,10 +919,38 @@ struct PoofFrameSet: Sendable {
     smoothPlan.blends(for: sample)
   }
 
-  func sourceCoverGlyphs(
+  /// The glyphs generated for an aspect, with no substitution.
+  ///
+  /// Playback should use ``sourceCoverGlyphs(for:)``. This answers what was
+  /// actually built, which is what proves the single-aspect generation path.
+  func storedSourceCoverGlyphs(
     for aspect: PoofSourceCoverAspect
   ) -> [PoofSourceCoverGlyph] {
     sourceCoverLayout?.glyphs(for: aspect) ?? []
+  }
+
+  func sourceCoverGlyphs(
+    for aspect: PoofSourceCoverAspect
+  ) -> [PoofSourceCoverGlyph] {
+    guard let sourceCoverLayout else {
+      return []
+    }
+
+    let glyphs = sourceCoverLayout.glyphs(for: aspect)
+
+    guard glyphs.isEmpty else {
+      return glyphs
+    }
+
+    // A layout built for one aspect class is asked for another when the source
+    // is resized across the 1.4 ratio. Answer with the aspect that was built
+    // rather than nothing, so the frame in flight before the rebuild lands
+    // still draws smoke.
+    guard let sourceCoverAspect else {
+      return []
+    }
+
+    return sourceCoverLayout.glyphs(for: sourceCoverAspect)
   }
 }
 
@@ -984,6 +1012,35 @@ enum PoofSimulation {
         : nil,
       sourceCoverAspect: coversSource ? sourceCoverAspect : nil
     )
+  }
+
+  /// The progress a frame is actually drawn at.
+  ///
+  /// Stepped playback holds one pose for a whole frame interval, so collapsing
+  /// progress onto the interval keeps SwiftUI from re-rendering the canvas at
+  /// display refresh for output that cannot change until the next swap. The
+  /// endpoints pass through untouched so they stay transparent.
+  static func drawnProgress(
+    for progress: Double,
+    motion: PoofMotion
+  ) -> Double {
+    guard motion == .stepped else {
+      return progress
+    }
+
+    let normalized = normalized(progress)
+
+    guard normalized > 0, normalized < 1 else {
+      return progress
+    }
+
+    let poseCount = Double(PoofPose.allCases.count)
+    let index = min(
+      Double(Int(normalized * poseCount)),
+      poseCount - 1
+    )
+
+    return (index + 0.5) / poseCount
   }
 
   static func pose(for progress: Double) -> PoofPose? {
@@ -2347,15 +2404,23 @@ enum PoofSimulation {
             key: candidateKey + 3,
             in: (-halfHeight + coverageInset)...(halfHeight - coverageInset)
           )
-          let parentIndex =
-            centers.indices.min {
-              let firstX = targetX - centers[$0].x
-              let firstY = targetY - centers[$0].y
-              let secondX = targetX - centers[$1].x
-              let secondY = targetY - centers[$1].y
-              return firstX * firstX + firstY * firstY
-                < secondX * secondX + secondY * secondY
-            } ?? 0
+          // Explicit scan: min(by:) re-measures the incumbent on every
+          // comparison, and this runs 96 times per grown glyph. Strict `<`
+          // keeps the first nearest, matching min(by:).
+          var parentIndex = 0
+          var parentSquaredDistance = Double.infinity
+
+          for centerIndex in centers.indices {
+            let deltaX = targetX - centers[centerIndex].x
+            let deltaY = targetY - centers[centerIndex].y
+            let squared = deltaX * deltaX + deltaY * deltaY
+
+            if squared < parentSquaredDistance {
+              parentSquaredDistance = squared
+              parentIndex = centerIndex
+            }
+          }
+
           let parent = centers[parentIndex]
           let targetDistance = hypot(
             targetX - parent.x,
@@ -2787,13 +2852,14 @@ enum PoofSimulation {
     return fullySizedGlyphs
   }
 
-  private static func sizedSourceCoverGlyphs(
+  /// The radius each covering glyph must reach so no grid cell is left bare.
+  static func sourceCoverageRadii(
     _ glyphs: [PoofSourceCoverGlyph],
     coverageCount: Int,
     sourceWidth: Double,
     sourceHeight: Double,
     artSide: Double
-  ) -> [PoofSourceCoverGlyph] {
+  ) -> [Double] {
     let cellSide = max(artSide * 0.02, 1)
     let columnCount = max(Int(ceil(sourceWidth / cellSide)), 1)
     let rowCount = max(Int(ceil(sourceHeight / cellSide)), 1)
@@ -2813,25 +2879,40 @@ enum PoofSimulation {
         let cellCenterY =
           -sourceHeight / 2
           + (Double(row) + 0.5) * cellHeight
-        let nearestIndex =
-          (0..<coverageCount).min {
-            let first = glyphs[$0]
-            let second = glyphs[$1]
-            return hypot(
-              cellCenterX - sourceWidth * first.x,
-              cellCenterY - sourceHeight * first.y
-            )
-              < hypot(
-                cellCenterX - sourceWidth * second.x,
-                cellCenterY - sourceHeight * second.y
-              )
-          } ?? 0
-        let glyph = glyphs[nearestIndex]
+        // One pass, one hypot per surviving candidate, keeping the first
+        // minimum exactly as Sequence.min(by:) does. The squared prefilter
+        // orders candidates identically to hypot, with a one-sided margin so
+        // it can only cost an extra hypot, never discard the true nearest.
+        var nearestIndex = 0
+        var nearestDistance = Double.infinity
+        var nearestSquaredBound = Double.infinity
+
+        for index in 0..<coverageCount {
+          let glyph = glyphs[index]
+          let deltaX = cellCenterX - sourceWidth * glyph.x
+          let deltaY = cellCenterY - sourceHeight * glyph.y
+          let squared = deltaX * deltaX + deltaY * deltaY
+
+          if squared > nearestSquaredBound {
+            continue
+          }
+
+          let distance = hypot(deltaX, deltaY)
+
+          if distance < nearestDistance {
+            nearestIndex = index
+            nearestDistance = distance
+            nearestSquaredBound = squared * (1 + 1e-12)
+          }
+        }
+
         let farthestDistance =
-          hypot(
-            cellCenterX - sourceWidth * glyph.x,
-            cellCenterY - sourceHeight * glyph.y
-          )
+          (coverageCount > 0
+            ? nearestDistance
+            : hypot(
+              cellCenterX - sourceWidth * glyphs[0].x,
+              cellCenterY - sourceHeight * glyphs[0].y
+            ))
           + halfCellDiagonal
         requiredRadii[nearestIndex] = max(
           requiredRadii[nearestIndex],
@@ -2839,6 +2920,24 @@ enum PoofSimulation {
         )
       }
     }
+
+    return requiredRadii
+  }
+
+  static func sizedSourceCoverGlyphs(
+    _ glyphs: [PoofSourceCoverGlyph],
+    coverageCount: Int,
+    sourceWidth: Double,
+    sourceHeight: Double,
+    artSide: Double
+  ) -> [PoofSourceCoverGlyph] {
+    let requiredRadii = sourceCoverageRadii(
+      glyphs,
+      coverageCount: coverageCount,
+      sourceWidth: sourceWidth,
+      sourceHeight: sourceHeight,
+      artSide: artSide
+    )
 
     return zip(glyphs, requiredRadii).enumerated().map {
       index,
@@ -2881,7 +2980,7 @@ enum PoofSimulation {
     }
   }
 
-  private static func largestSourceCoverGap(
+  static func largestSourceCoverGap(
     among glyphs: ArraySlice<PoofSourceCoverGlyph>,
     seed: UInt64,
     key: UInt64,
@@ -2894,17 +2993,27 @@ enum PoofSimulation {
     let rowCount = max(Int(ceil(sourceHeight / cellSide)), 1)
     let cellWidth = sourceWidth / Double(columnCount)
     let cellHeight = sourceHeight / Double(rowCount)
-    let discs = glyphs.map { glyph in
-      (
-        x: sourceWidth * glyph.x,
-        y: sourceHeight * glyph.y,
-        radius:
-          min(
-            sourceWidth * glyph.width,
-            sourceHeight * glyph.height
-          ) * 0.30
+    // Parallel arrays keep the inner scan free of tuple loads.
+    var discX = [Double]()
+    var discY = [Double]()
+    var discRadius = [Double]()
+    discX.reserveCapacity(glyphs.count)
+    discY.reserveCapacity(glyphs.count)
+    discRadius.reserveCapacity(glyphs.count)
+
+    for glyph in glyphs {
+      discX.append(sourceWidth * glyph.x)
+      discY.append(sourceHeight * glyph.y)
+      discRadius.append(
+        min(
+          sourceWidth * glyph.width,
+          sourceHeight * glyph.height
+        ) * 0.30
       )
     }
+
+    let originX = -sourceWidth / 2
+    let originY = -sourceHeight / 2
     var largestGap = (x: 0.0, y: 0.0)
     var largestDeficit = -Double.infinity
 
@@ -2914,7 +3023,7 @@ enum PoofSimulation {
           key + UInt64(row * columnCount + column) * 0x10
         let point = (
           x:
-            -sourceWidth / 2
+            originX
             + (Double(column)
               + coverUnitNoise(
                 seed: seed,
@@ -2922,7 +3031,7 @@ enum PoofSimulation {
                 in: 0.28...0.72
               )) * cellWidth,
           y:
-            -sourceHeight / 2
+            originY
             + (Double(row)
               + coverUnitNoise(
                 seed: seed,
@@ -2931,15 +3040,50 @@ enum PoofSimulation {
               )) * cellHeight
         )
         var deficit = Double.infinity
+        var isPruned = false
 
-        for disc in discs {
+        for discIndex in discRadius.indices {
+          // The score below scales the final deficit by a factor bounded to
+          // 0.96...1.04, and the deficit only falls as discs are scanned, so
+          // the running value bounds this cell's best possible score. Once
+          // that bound cannot beat the winner the cell is settled. Skipping
+          // the remaining work is exact because the noise is counter-based:
+          // an undrawn value leaves no state behind.
+          let bound =
+            deficit >= 0
+            ? deficit * 1.04
+            : deficit * 0.96
+
+          if bound <= largestDeficit {
+            isPruned = true
+            break
+          }
+
+          let reach = deficit + discRadius[discIndex]
+
+          guard reach > 0 else {
+            continue
+          }
+
+          let deltaX = point.x - discX[discIndex]
+          let deltaY = point.y - discY[discIndex]
+          let squared = deltaX * deltaX + deltaY * deltaY
+
+          // Squared distance orders the discs identically to hypot. The
+          // margin keeps the comparison one-sided, so the filter can only
+          // cost an extra hypot, never skip a disc that would have won.
+          if squared > reach * reach * (1 + 1e-12) {
+            continue
+          }
+
           deficit = min(
             deficit,
-            hypot(
-              point.x - disc.x,
-              point.y - disc.y
-            ) - disc.radius
+            hypot(deltaX, deltaY) - discRadius[discIndex]
           )
+        }
+
+        guard !isPruned else {
+          continue
         }
 
         let score =
@@ -2960,7 +3104,7 @@ enum PoofSimulation {
     return largestGap
   }
 
-  private static func coverUnitNoise(
+  static func coverUnitNoise(
     seed: UInt64,
     key: UInt64,
     in range: ClosedRange<Double>
