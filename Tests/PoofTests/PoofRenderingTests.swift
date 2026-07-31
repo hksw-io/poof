@@ -1433,6 +1433,113 @@ struct PoofRenderingTests {
     #expect(puffsBounds.height > ringletsBounds.height)
   }
 
+  @Test("Resting content keeps what falls outside its bounds")
+  func progressiveRemovalKeepsRestingContentUnclipped() throws {
+    // SwiftUI evaluates a transition's body in the identity phase, so a mask
+    // installed whenever removal is progressive clips every view that merely
+    // carries the transition, for as long as it is on screen. Shadows, glows,
+    // and overflowing decoration all disappear.
+    let cellSide = 200.0
+    let sourceSide = 84.0
+    let frameSet = PoofSimulation.makeFrameSet(
+      configuration: PoofConfiguration(seed: 0x504F_4F46),
+      variationSeed: 0x504F_4F46
+    )
+
+    func overflowAlpha(atProgress progress: Double) throws -> UInt64 {
+      let content = Color.blue
+        .frame(width: sourceSide, height: sourceSide)
+        .overlay {
+          Circle()
+            .fill(Color.green)
+            .frame(width: 40, height: 40)
+            .offset(x: 82)
+        }
+        .modifier(
+          PoofContentRemovalModifier(
+            progress: progress,
+            contentRemoval: .progressive,
+            motion: .stepped,
+            reducesMotion: false,
+            frameSet: frameSet
+          )
+        )
+        .frame(width: cellSide, height: cellSide)
+      let renderer = ImageRenderer(content: content)
+      renderer.proposedSize = ProposedViewSize(
+        width: cellSide,
+        height: cellSide
+      )
+      renderer.scale = 1
+
+      let image = try #require(renderer.cgImage)
+      let snapshot = PixelSnapshot(image: image)
+      // Everything to the right of the source's own bounds.
+      let firstColumn = Int((cellSide + sourceSide) / 2) + 1
+      var total: UInt64 = 0
+
+      for row in 0..<snapshot.height {
+        for column in firstColumn..<snapshot.width {
+          total += UInt64(
+            snapshot.pixels[(row * snapshot.width + column) * 4 + 3]
+          )
+        }
+      }
+
+      return total
+    }
+
+    #expect(try overflowAlpha(atProgress: 0) > 0)
+    // Once removal begins the mask is the point, so the overflow goes.
+    #expect(try overflowAlpha(atProgress: 0.01) == 0)
+  }
+
+  @Test("Progressive breakup carries on at the covered scale")
+  func progressiveBreakupKeepsCoveredScale() throws {
+    // The cover tracks the laid-out bounds while the authored poses are drawn
+    // against artSide, which is clamped to 42...160. Handed over untouched,
+    // the smoke collapses in a single frame, and the collapse grows without
+    // bound once the source passes the clamp.
+    let sizes = [
+      CGSize(width: 84, height: 84),
+      CGSize(width: 132, height: 48),
+      CGSize(width: 300, height: 300),
+    ]
+
+    for size in sizes {
+      let covered = try #require(
+        progressiveSmokeSnapshot(
+          progress: 0.50,
+          style: .classic,
+          renderScale: 1,
+          sourceSize: size
+        )
+      )
+      let breakup = try #require(
+        progressiveSmokeSnapshot(
+          progress: 0.70,
+          style: .classic,
+          renderScale: 1,
+          sourceSize: size
+        )
+      )
+      let coveredBounds = try #require(covered.statistics.bounds)
+      let breakupBounds = try #require(breakup.statistics.bounds)
+      let ratio =
+        Double(max(breakupBounds.width, breakupBounds.height))
+        / Double(max(coveredBounds.width, coveredBounds.height))
+
+      #expect(
+        (0.55...1.05).contains(ratio),
+        """
+        \(size.width)×\(size.height): cover \
+        \(coveredBounds.width)×\(coveredBounds.height), breakup \
+        \(breakupBounds.width)×\(breakupBounds.height), ratio \(ratio)
+        """
+      )
+    }
+  }
+
   @Test("Later poses lose mass at every particle count")
   func laterPosesContractAtEveryParticleCount() throws {
     // The measured size calibration addresses the descriptor tables, which the
@@ -2287,9 +2394,9 @@ struct PoofRenderingTests {
     style: PoofStyle,
     renderScale: Double,
     motion: PoofMotion = .stepped,
-    variationSeed: UInt64 = 0x504F_4F46
+    variationSeed: UInt64 = 0x504F_4F46,
+    sourceSize: CGSize = CGSize(width: 84, height: 84)
   ) -> PixelSnapshot? {
-    let sourceSize = CGSize(width: 84, height: 84)
     let artSide = PoofLayout.artSide(for: sourceSize)
     let padding = artSide * 0.16
     let canvasSize = CGSize(

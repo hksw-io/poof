@@ -299,6 +299,25 @@ private struct PreparedPoofCanvas: View {
       } else {
         nil
       }
+    // Stepped progressive playback hands the breakup poses on at the scale the
+    // cover reached, resolved here so the Canvas callback only draws.
+    let progressiveBreakupBlends: [PoofGlyphBlend]? =
+      if sample == nil,
+        occludesSource,
+        let pose,
+        let frameSet,
+        let sourceSize,
+        let referenceArtSide
+      {
+        PoofArtwork.progressiveBreakupBlends(
+          for: pose,
+          in: CGRect(origin: .zero, size: sourceSize),
+          artSide: referenceArtSide,
+          frameSet: frameSet
+        )
+      } else {
+        nil
+      }
 
     Canvas(
       opaque: false,
@@ -359,6 +378,8 @@ private struct PreparedPoofCanvas: View {
       let glyphBlends: [PoofGlyphBlend] =
         if sample != nil {
           smoothGlyphBlends ?? []
+        } else if let progressiveBreakupBlends {
+          progressiveBreakupBlends
         } else if let pose {
           PoofArtwork.renderedGlyphBlends(
             for: pose,
@@ -644,6 +665,130 @@ enum PoofArtwork {
     // A wider opaque underpaint closes source-edge seams; the dark contour is
     // drawn immediately afterward to keep neighboring puffs legible.
     return coverOutlineWidth * 4.5
+  }
+
+  /// How far the breakup poses must be stretched to leave off where the
+  /// progressive cover ended.
+  struct ProgressiveBreakupScale: Equatable, Sendable {
+    static let identity = ProgressiveBreakupScale(
+      positionX: 1,
+      positionY: 1,
+      size: 1
+    )
+
+    let positionX: Double
+    let positionY: Double
+    let size: Double
+  }
+
+  /// Bridges the progressive cover's source space to the authored art space.
+  ///
+  /// The cover is a similarity map onto the laid-out bounds, while the breakup
+  /// poses are drawn against `artSide`, which is clamped to 42...160. Without a
+  /// bridge the smoke jumps between the two at the third pose swap, and the
+  /// jump grows without bound once the source passes the clamp.
+  ///
+  /// Positions scale per axis so a wide row keeps a wide dispersal, while size
+  /// follows the tighter axis so a long thin source keeps normally
+  /// proportioned puffs instead of one stretched blob.
+  static func progressiveBreakupScale(
+    in rect: CGRect,
+    artSide: Double,
+    frameSet: PoofFrameSet
+  ) -> ProgressiveBreakupScale {
+    let coverGlyphs = sourceCoverGlyphLayers(
+      for: .puffs,
+      in: rect,
+      artSide: artSide,
+      frameSet: frameSet
+    )
+    .map(\.glyph)
+    let authoredGlyphs = frameSet.glyphs(for: .puffs)
+
+    guard
+      !coverGlyphs.isEmpty,
+      !authoredGlyphs.isEmpty
+    else {
+      return .identity
+    }
+
+    let cover = normalizedExtent(of: coverGlyphs)
+    let authored = normalizedExtent(of: authoredGlyphs)
+
+    guard
+      authored.x > 0,
+      authored.y > 0,
+      cover.x.isFinite,
+      cover.y.isFinite
+    else {
+      return .identity
+    }
+
+    let positionX = min(max(cover.x / authored.x, 0.25), 64)
+    let positionY = min(max(cover.y / authored.y, 0.25), 64)
+
+    return ProgressiveBreakupScale(
+      positionX: positionX,
+      positionY: positionY,
+      size: min(max(min(positionX, positionY), 0.5), 4)
+    )
+  }
+
+  private static func normalizedExtent(
+    of glyphs: [PoofGlyph]
+  ) -> (x: Double, y: Double) {
+    var x = 0.0
+    var y = 0.0
+
+    for glyph in glyphs {
+      x = max(x, abs(glyph.x) + glyph.width / 2)
+      y = max(y, abs(glyph.y) + glyph.height / 2)
+    }
+
+    return (x, y)
+  }
+
+  /// The breakup blends for progressive playback, carried on from the scale
+  /// the cover reached. One scale serves both breakup poses so the authored
+  /// contraction between them survives untouched.
+  static func progressiveBreakupBlends(
+    for pose: PoofPose,
+    in rect: CGRect,
+    artSide: Double,
+    frameSet: PoofFrameSet
+  ) -> [PoofGlyphBlend] {
+    switch pose {
+    case .cloud, .clusters, .puffs:
+      return []
+    case .wisps, .ringlets:
+      break
+    }
+
+    let scale = progressiveBreakupScale(
+      in: rect,
+      artSide: artSide,
+      frameSet: frameSet
+    )
+
+    return frameSet.glyphs(for: pose)
+      .prefix(maximumRenderedElementCount)
+      .enumerated()
+      .map { index, glyph in
+        .single(
+          PoofGlyph(
+            x: glyph.x * scale.positionX,
+            y: glyph.y * scale.positionY,
+            width: glyph.width * scale.size,
+            height: glyph.height * scale.size,
+            opacity: glyph.opacity,
+            contour: glyph.contour,
+            paint: glyph.paint,
+            rotation: glyph.rotation,
+            tone: glyph.tone
+          ),
+          paletteIndex: index
+        )
+      }
   }
 
   static func renderedGlyphs(

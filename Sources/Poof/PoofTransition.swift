@@ -380,7 +380,9 @@ struct PoofContentRemovalModifier: ViewModifier {
       reducesMotion: reducesMotion
     )
 
-    if contentRemoval == .progressive {
+    if contentRemoval == .progressive,
+      PoofSourceRemoval.isActive(progress: progress)
+    {
       let maskProgress = reducesMotion ? 0 : progress
       let resolvedOpacity =
         frameSet == nil && !reducesMotion
@@ -406,6 +408,12 @@ struct PoofContentRemovalModifier: ViewModifier {
           .allowsHitTesting(false)
           .accessibilityHidden(true)
         }
+    } else if contentRemoval == .progressive {
+      // At rest the mask would clip the view to its layout rect for as long as
+      // it is on screen, taking shadows, glows, and any overflow with it.
+      // SwiftUI evaluates a transition's body in the identity phase, so this
+      // is every view that merely carries the transition.
+      content
     } else {
       content
         .opacity(opacity)
@@ -453,6 +461,19 @@ enum PoofSourceRemoval {
   static func snap(_ transaction: inout Transaction) {
     transaction.animation = nil
     transaction.disablesAnimations = true
+  }
+
+  /// Whether a removal is under way at this progress.
+  ///
+  /// Every non-removal transition phase reports zero, so this is what
+  /// separates a view that is disappearing from one that merely carries the
+  /// transition.
+  static func isActive(progress: Double) -> Bool {
+    guard !progress.isNaN, progress != -.infinity else {
+      return false
+    }
+
+    return progress > 0
   }
 }
 
