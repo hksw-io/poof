@@ -1,0 +1,123 @@
+/* Generated from Localizable.xcstrings. The toolchain does not compile a
+   String Catalog for this target, so the catalog stays as the source of
+   truth for translators and this file is what actually ships. */
+
+/* Short description of the Bloom poof style. */
+"A soft, full cloud with a cartoony pop." = "A soft, full cloud with a cartoony pop.";
+
+/* Short description of the Snap poof style. */
+"A tighter poof with a punchier break." = "A tighter poof with a punchier break.";
+
+/* Preview option that animates the poof. */
+"Animation" = "Animation";
+
+/* Label for the demo appearance picker. */
+"Appearance" = "Appearance";
+
+/* Name of the rounder modern poof style. */
+"Bloom" = "Bloom";
+
+/* Name of the wide capsule demo surface. */
+"Capsule" = "Capsule";
+
+/* Name of the circular demo surface. */
+"Circle" = "Circle";
+
+/* Name of the clean-room original poof style. */
+"Classic" = "Classic";
+
+/* Preview option for the full cloud pose. */
+"Cloud" = "Cloud";
+
+/* Preview option for the four-cluster pose. */
+"Clusters" = "Clusters";
+
+/* Appearance option that uses dark mode. */
+"Dark" = "Dark";
+
+/* Label for the poof playback duration slider. */
+"Duration" = "Duration";
+
+/* Default poof palette option that uses neutral fills. */
+"Grayscale" = "Grayscale";
+
+/* Status shown when Increased Contrast is disabled. */
+"Increased Contrast off" = "Increased Contrast off";
+
+/* Status shown when Increased Contrast is enabled. */
+"Increased Contrast on" = "Increased Contrast on";
+
+/* Appearance option that uses light mode. */
+"Light" = "Light";
+
+/* Label for choosing stepped or smooth poof motion. */
+"Motion" = "Motion";
+
+/* Label for choosing poof fill colors. */
+"Palette" = "Palette";
+
+/* Poof palette option that uses the built-in pastel colors. */
+"Pastel" = "Pastel";
+
+/* Button that removes all three demo items. */
+"Poof all" = "Poof all";
+
+/* Label for choosing playback or a static poof pose. */
+"Preview" = "Preview";
+
+/* Preview option for the dense puffs pose. */
+"Puffs" = "Puffs";
+
+/* Status shown when Reduce Motion is disabled. */
+"Reduce Motion off" = "Reduce Motion off";
+
+/* Status shown when Reduce Motion is enabled. */
+"Reduce Motion on" = "Reduce Motion on";
+
+/* Explanation shown when Reduce Motion is enabled. */
+"Reduce Motion replaces spatial poofs with a fade." = "Reduce Motion replaces spatial poofs with a fade.";
+
+/* Status shown when Reduce Transparency is disabled. */
+"Reduce Transparency off" = "Reduce Transparency off";
+
+/* Status shown when Reduce Transparency is enabled. */
+"Reduce Transparency on" = "Reduce Transparency on";
+
+/* Button that restores all three demo items. */
+"Restore" = "Restore";
+
+/* Preview option for the final ringlets pose. */
+"Ringlets" = "Ringlets";
+
+/* Name of the rounded-square demo surface. */
+"Rounded square" = "Rounded square";
+
+/* Poof motion option that interpolates between poses. */
+"Smooth" = "Smooth";
+
+/* Name of the punchier modern poof style. */
+"Snap" = "Snap";
+
+/* Name of the star-shaped demo surface. */
+"Star" = "Star";
+
+/* Poof motion option that holds five authored poses. */
+"Stepped" = "Stepped";
+
+/* Label for choosing the source shape to poof. */
+"Surface" = "Surface";
+
+/* Appearance option that follows the system. */
+"System" = "System";
+
+/* Short description of the Classic poof style. */
+"The crisp five-pose original." = "The crisp five-pose original.";
+
+/* Description above the poof style comparison. */
+"The original, plus two playful takes designed for today." = "The original, plus two playful takes designed for today.";
+
+/* Heading above the poof style comparison. */
+"Three ways to poof" = "Three ways to poof";
+
+/* Preview option for the sparse wisps pose. */
+"Wisps" = "Wisps";

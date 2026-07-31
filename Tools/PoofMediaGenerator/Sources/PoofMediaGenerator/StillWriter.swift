@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -10,22 +11,16 @@ enum StillWriter {
     case cannotFinalize
   }
 
+  /// Writes a still from the rendered image.
+  ///
+  /// The still used to be decoded back out of the GIF that had just been
+  /// written, which put it through a 256-entry palette on the way: the
+  /// committed stills carried as few as 81 distinct colors, banding the window
+  /// shadow into visible steps. The renderer's own image is right there.
   static func write(
-    frameAt index: Int,
-    from sourceURL: URL,
+    _ image: CGImage,
     to outputURL: URL
   ) throws {
-    guard
-      let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil)
-    else {
-      throw WriteError.cannotCreateSource
-    }
-    guard
-      let image = CGImageSourceCreateImageAtIndex(source, index, nil)
-    else {
-      throw WriteError.cannotCreateImage
-    }
-
     let temporaryURL = FileManager.default.temporaryDirectory.appending(
       path: "\(outputURL.lastPathComponent)-\(UUID().uuidString).png"
     )

@@ -27,14 +27,14 @@ struct PoofMediaGenerator {
       let optionsGIFURL = outputDirectory.appending(
         path: "poof-options-\(suffix).gif"
       )
-      try write(
+      let macFrames = try write(
         to: macGIFURL,
         size: macSize
       ) { frame in
         MacPreview(appearance: appearance, frame: frame)
       }
 
-      try write(
+      let optionsFrames = try write(
         to: optionsGIFURL,
         size: optionsSize,
         frames: CaptureFrame.optionSequence
@@ -42,16 +42,16 @@ struct PoofMediaGenerator {
         OptionsPreview(appearance: appearance, frame: frame)
       }
 
+      // Stills come from the rendered frames, not from the GIF that was just
+      // written, so they keep their full color depth.
       try StillWriter.write(
-        frameAt: stillFrameIndex,
-        from: macGIFURL,
+        macFrames[stillFrameIndex].image,
         to: outputDirectory.appending(
           path: "poof-macos-\(suffix).png"
         )
       )
       try StillWriter.write(
-        frameAt: optionsStillFrameIndex,
-        from: optionsGIFURL,
+        optionsFrames[optionsStillFrameIndex].image,
         to: outputDirectory.appending(
           path: "poof-options-\(suffix).png"
         )
@@ -60,12 +60,13 @@ struct PoofMediaGenerator {
   }
 
   @MainActor
+  @discardableResult
   private static func write<Content: View>(
     to url: URL,
     size: CGSize,
     frames captureFrames: [CaptureFrame] = CaptureFrame.sequence,
     content: (CaptureFrame) -> Content
-  ) throws {
+  ) throws -> [GIFFrame] {
     let frames = try captureFrames.map { frame in
       let view = content(frame)
         .frame(width: size.width, height: size.height)
@@ -84,6 +85,8 @@ struct PoofMediaGenerator {
 
     try GIFWriter.write(frames, to: url)
     print("Wrote \(url.path(percentEncoded: false))")
+
+    return frames
   }
 
   private static func outputDirectory(

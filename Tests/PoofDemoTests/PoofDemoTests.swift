@@ -1,4 +1,5 @@
 #if os(macOS)
+  import Foundation
   import Testing
 
   @testable import PoofDemo
@@ -96,5 +97,32 @@
       #expect(DemoMotion.stepped.poofMotion == .stepped)
       #expect(DemoMotion.smooth.poofMotion == .smooth)
     }
+
+    @Test("Every demo string reaches the bundle")
+    func demoStringsReachTheBundle() throws {
+      // The String Catalog is not compiled for this target: a build produces
+      // a resource bundle holding nothing but Info.plist, so every lookup
+      // fell through to the key. The generated strings file is what actually
+      // ships, and it has to stay in step with the catalog.
+      let bundle = Bundle.module
+      let url = try #require(
+        bundle.url(
+          forResource: "Localizable",
+          withExtension: "strings",
+          subdirectory: nil,
+          localization: "en"
+        )
+      )
+      let strings = try #require(
+        NSDictionary(contentsOf: url) as? [String: String]
+      )
+
+      #expect(strings.count == 40)
+
+      for key in ["Reduce Motion on", "Increased Contrast off", "Classic"] {
+        #expect(strings[key] != nil, "missing \(key)")
+      }
+    }
   }
+
 #endif

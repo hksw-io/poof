@@ -266,6 +266,12 @@
           .controlSize(.large)
           .keyboardShortcut(.defaultAction)
           .disabled(!previewMode.isPlayback)
+          // The button label rides the same state as the poof, so without
+          // this it cross-fades for the whole playback, which at the slowest
+          // setting is five seconds of a half-faded word.
+          .transaction { transaction in
+            transaction.animation = nil
+          }
 
           Picker(selection: $previewMode) {
             ForEach(DemoPreviewMode.allCases, id: \.self) { mode in
@@ -360,7 +366,6 @@
           }
           .pickerStyle(.segmented)
           .fixedSize()
-          .disabled(!previewMode.isPlayback)
 
           Spacer()
 
@@ -410,22 +415,42 @@
     var body: some View {
       VStack(spacing: 8) {
         HStack(spacing: 12) {
+          // Bare literals here would resolve against Bundle.main, which for
+          // an SPM executable never holds these strings.
           StatusPill(
             title: reducesMotion
-              ? "Reduce Motion on"
-              : "Reduce Motion off",
+              ? LocalizedStringResource(
+                "Reduce Motion on",
+                bundle: #bundle
+              )
+              : LocalizedStringResource(
+                "Reduce Motion off",
+                bundle: #bundle
+              ),
             systemImage: reducesMotion ? "figure.walk.motion" : "figure.walk"
           )
           StatusPill(
             title: reducesTransparency
-              ? "Reduce Transparency on"
-              : "Reduce Transparency off",
+              ? LocalizedStringResource(
+                "Reduce Transparency on",
+                bundle: #bundle
+              )
+              : LocalizedStringResource(
+                "Reduce Transparency off",
+                bundle: #bundle
+              ),
             systemImage: "circle.lefthalf.filled"
           )
           StatusPill(
             title: colorSchemeContrast == .increased
-              ? "Increased Contrast on"
-              : "Increased Contrast off",
+              ? LocalizedStringResource(
+                "Increased Contrast on",
+                bundle: #bundle
+              )
+              : LocalizedStringResource(
+                "Increased Contrast off",
+                bundle: #bundle
+              ),
             systemImage: "circle.righthalf.filled"
           )
         }
