@@ -27,8 +27,9 @@ the deprecated `NSAnimationEffect` API or ship copied system assets.
   </tr>
 </table>
 
-The animation swaps through five drawn poses at 15 frames per second. One
-playback takes one-third of a second.
+By default, the animation swaps through five drawn poses at 15 frames per
+second. Smooth interpolation is available when the hard pose changes don't fit
+the interaction. Either mode takes one-third of a second.
 
 ## Requirements
 
@@ -44,7 +45,7 @@ In Xcode, choose **File → Add Package Dependencies** and enter:
 https://github.com/hksw-io/poof.git
 ```
 
-Set the dependency rule to **Up to Next Major Version** starting at `1.0.0`.
+Set the dependency rule to **Up to Next Major Version** starting at `1.1.0`.
 
 For a package manifest, add the package and product dependency:
 
@@ -52,7 +53,7 @@ For a package manifest, add the package and product dependency:
 dependencies: [
   .package(
     url: "https://github.com/hksw-io/poof.git",
-    from: "1.0.0"
+    from: "1.1.0"
   )
 ],
 targets: [
@@ -113,22 +114,53 @@ one-third-second timing.
 
 ## Styles and gradual removal
 
-`classic` is the clean-room recreation and remains the default. Three opt-in
+`classic` is the clean-room recreation and remains the default. Two opt-in
 styles keep the same five-pose timing while changing the character of the
 smoke:
 
 | Style | Character |
 | --- | --- |
 | `.classic` | Crisp, compact grayscale smoke |
-| `.bloom` | Round pastel clouds with a cartoony pop |
+| `.bloom` | Round, full clouds with a cartoony pop |
 | `.snap` | A tighter opening and punchier radial breakup |
-| `.drift` | Light curls and wisps that rise as they fade |
 
 Pass a style when you want something other than the classic poof:
 
 ```swift
 .transition(.poof(style: .bloom))
 ```
+
+Color and motion are separate from style. Every style is grayscale by default.
+Pass `.pastel` or your own colors when the removal should be colorful:
+
+```swift
+let candy = PoofPalette(
+  colors: [
+    Color(red: 1.00, green: 0.63, blue: 0.52),
+    Color(red: 0.48, green: 0.78, blue: 1.00),
+    Color(red: 0.56, green: 0.90, blue: 0.68),
+    Color(red: 0.78, green: 0.67, blue: 1.00),
+  ]
+)
+
+RoundedRectangle(cornerRadius: 16)
+  .transition(
+    .poof(
+      style: .snap,
+      palette: candy,
+      motion: .smooth
+    )
+  )
+```
+
+`PoofPalette.automatic` and `.monochrome` both use the default grayscale fills.
+Color is always opt-in through `.pastel` or `PoofPalette(colors:)`.
+
+`PoofMotion.stepped` preserves the five hard pose changes at 15 frames per
+second. `.smooth` gives each puff one contour and fill for the full playback,
+moves it along a continuous path, and scales it in or out at a staggered,
+playback-seeded moment. It does not fade or swap puffs mid-flight. Motion choice
+does not change the playback duration.
 
 The default `.immediate` removal hides the source as playback begins. Use
 `.progressive` to let dense smoke cover the source before it disappears:
@@ -205,8 +237,10 @@ struct PoofScrubber: View {
     VStack {
       PoofEffect(
         progress: progress,
-        style: .drift,
-        configuration: PoofConfiguration(seed: 42)
+        style: .snap,
+        configuration: PoofConfiguration(seed: 42),
+        palette: .pastel,
+        motion: .smooth
       )
       .frame(width: 120, height: 120)
 
@@ -218,8 +252,8 @@ struct PoofScrubber: View {
 }
 ```
 
-The `style` argument is optional; omitting it uses `.classic`. `PoofEffect`
-draws only the smoke, and values at either endpoint draw nothing.
+The `style`, `palette`, and `motion` arguments are optional. `PoofEffect` draws
+only the smoke, and values at either endpoint draw nothing.
 When building a custom removal interaction, the caller is responsible for
 hiding the source view, disabling hit testing, and removing it from the
 accessibility tree. Use `.transition(.poof())` for the built-in behavior.
@@ -230,8 +264,8 @@ accessibility tree. Use `.transition(.poof())` for the built-in behavior.
   smoke. A standalone `PoofEffect` suppresses the smoke.
 - Reduce Transparency removes the soft shadow and keeps small shapes legible.
 - Increased Contrast strengthens the outline and internal marks.
-- The smoke uses the same palette in light and dark appearance. Classic, Snap,
-  and Drift stay grayscale; Bloom keeps its restrained pastel fills.
+- Built-in colors stay the same in light and dark appearance. Custom SwiftUI
+  colors may adapt to the environment if you pass semantic colors.
 - The transition removes the source view from hit testing and the accessibility
   tree as removal starts. Its drawing canvas is never interactive or exposed to
   accessibility.
@@ -255,11 +289,12 @@ the drawing field.
 
 ## Performance
 
-Poof generates seeded glyph descriptors once at playback start. Each render
-selects one pose from absolute progress and draws it in one `Canvas`; there is
-no timer, per-frame random work, or SwiftUI view per glyph. Glyph count and
-field size stay bounded. Progressive removal prepares coverage only for the
-source's laid-out aspect ratio.
+Poof generates seeded glyph descriptors once at playback start. Stepped motion
+selects one pose from absolute progress; smooth motion evaluates at most 64
+precomputed tracks. Both draw in one `Canvas`, with no timer, per-frame random
+work, or SwiftUI view per glyph. Glyph count and field size stay bounded.
+Progressive removal prepares coverage only for the source's laid-out aspect
+ratio.
 
 ## Clean-room scope
 
@@ -278,6 +313,10 @@ Run the macOS demo:
 ```sh
 make run
 ```
+
+The demo applies palette and motion settings to every style at once. Its
+duration slider ranges from the production one-third-second timing to five
+seconds for close inspection.
 
 Run formatting checks, the debug and release package tests, and the media
 generator tests:

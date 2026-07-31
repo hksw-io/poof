@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+## 1.1.0 - 2026-07-31
+
+### Breaking changes
+
+- Removes the Drift style.
+
+### Added
+
+- Makes every style grayscale by default, with pastel and custom fill palettes
+  available as opt-in choices.
+- Adds opt-in smooth motion with persistent puff tracks, continuous paths, and
+  staggered scale-only entry and exit.
+- Adds shared palette, motion, surface, appearance, pose, and duration controls
+  to the macOS demo.
+
+### Changed
+
+- Makes the second pose clearly smaller than the dense-puff pose in standalone
+  and progressive playback.
+- Keeps new progressive puffs attached to the prior smoke as they expand.
+
 ## 1.0.0 - 2026-07-30
 
 Poof 1.0.0 brings a clean-room take on AppKit's former disappearing-item
