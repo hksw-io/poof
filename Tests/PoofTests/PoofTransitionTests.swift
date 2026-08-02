@@ -6,17 +6,9 @@ import Testing
 @MainActor
 @Suite("Poof transition")
 struct PoofTransitionTests {
-  @Test("Poof timing is stepped by default and opt-in for smooth")
+  @Test("Poof timing is the five-pose clock unless overridden")
   func poofAnimationTiming() {
     #expect(Animation.poof == .linear(duration: PoofSimulation.duration))
-    #expect(
-      Animation.poof(motion: .stepped)
-        == .linear(duration: PoofSimulation.duration)
-    )
-    #expect(
-      Animation.poof(motion: .smooth)
-        == .linear(duration: PoofSimulation.smoothDuration)
-    )
     #expect(Animation.poof(duration: 0.5) == .linear(duration: 0.5))
     // Clamped, so a stray value cannot stall or blink the effect.
     #expect(Animation.poof(duration: 0) == .linear(duration: 0.15))
@@ -25,7 +17,7 @@ struct PoofTransitionTests {
       Animation.poof(duration: .nan)
         == .linear(duration: PoofSimulation.duration)
     )
-    // The stepped clock is the recreation's own and must not have moved.
+    // The clock is the recreation's own and must not have moved.
     #expect(PoofSimulation.duration == 1.0 / 3.0)
   }
 
@@ -74,16 +66,13 @@ struct PoofTransitionTests {
     #expect(rolls == 1)
   }
 
-  @Test("Stepped playback draws one progress per pose interval")
+  @Test("Playback draws one progress per pose interval")
   func steppedDrawnProgressCollapsesToPoses() {
     let interiorSamples = stride(from: 0.01, through: 0.99, by: 0.01)
     var drawn = Set<Double>()
 
     for progress in interiorSamples {
-      let value = PoofSimulation.drawnProgress(
-        for: progress,
-        motion: .stepped
-      )
+      let value = PoofSimulation.drawnProgress(for: progress)
 
       drawn.insert(value)
       // Collapsing must not move a frame into a neighboring pose.
@@ -95,19 +84,10 @@ struct PoofTransitionTests {
 
     #expect(drawn.count == PoofPose.allCases.count)
 
-    // Smooth playback needs every value it is given.
-    for progress in interiorSamples {
-      #expect(
-        PoofSimulation.drawnProgress(for: progress, motion: .smooth)
-          == progress
-      )
-    }
-
     // Endpoints pass through so they stay transparent.
     for endpoint in [0.0, 1.0, -1.0, 2.0] {
       #expect(
-        PoofSimulation.drawnProgress(for: endpoint, motion: .stepped)
-          == endpoint
+        PoofSimulation.drawnProgress(for: endpoint) == endpoint
       )
     }
   }
@@ -141,7 +121,6 @@ struct PoofTransitionTests {
     requireSendable(PoofConfiguration.self)
     requireSendable(PoofStyle.self)
     requireSendable(PoofPalette.self)
-    requireSendable(PoofMotion.self)
     requireSendable(PoofContentRemoval.self)
     requireSendable(PoofTransition.self)
   }
@@ -151,17 +130,16 @@ struct PoofTransitionTests {
     let classic = PoofTransition()
     let bloom = PoofTransition(style: .bloom)
     let progressive = PoofTransition(contentRemoval: .progressive)
-    let smoothPastelSnap = PoofTransition(
+    let pastelSnap = PoofTransition(
       style: .snap,
       contentRemoval: .progressive,
-      palette: .pastel,
-      motion: .smooth
+      palette: .pastel
     )
 
     requireSendable(type(of: classic))
     requireSendable(type(of: bloom))
     requireSendable(type(of: progressive))
-    requireSendable(type(of: smoothPastelSnap))
+    requireSendable(type(of: pastelSnap))
   }
 
   @Test("Immediate and progressive removal preserve their source semantics")
@@ -242,6 +220,54 @@ struct PoofTransitionTests {
 
     #expect(erosion.path(for: 0, in: rect) == Path(rect))
     #expect(erosion.path(for: 1, in: rect).isEmpty)
+  }
+
+  @Test("Erosion steps carry a solved boolean, not a pending one")
+  func erosionStepsAreSettled() throws {
+    let rect = CGRect(x: 0, y: 0, width: 84, height: 84)
+
+    // A `Path` boolean is lazy, and an unsolved one lies about being empty:
+    // this subtracts a rect from itself and still reports content. Whatever
+    // asks for the geometry first pays for the solve, and in a mask that is
+    // the main thread, every frame.
+    let pending = Path(rect).subtracting(Path(rect), eoFill: false)
+
+    #expect(!pending.isEmpty)
+    #expect(Path(pending.cgPath).isEmpty)
+
+    // Going through CGPath settles it without moving it.
+    let bitten = Path(rect).subtracting(
+      Path(ellipseIn: rect.insetBy(dx: 20, dy: 20)),
+      eoFill: false
+    )
+    let settled = Path(bitten.cgPath)
+
+    #expect(!settled.isEmpty)
+    #expect(settled.boundingRect.equalTo(bitten.boundingRect))
+
+    for row in stride(from: 0.5, to: rect.height, by: 3) {
+      for column in stride(from: 0.5, to: rect.width, by: 3) {
+        let point = CGPoint(x: column, y: row)
+
+        #expect(settled.contains(point) == bitten.contains(point))
+      }
+    }
+
+    // What the factory builds is settled, so a step that has eaten everything
+    // reports it — which is what `engulfProgress` and the retirement guard
+    // both read.
+    let size = CGSize(width: 84, height: 84)
+    let frameSet = PoofSimulation.makeFrameSet(
+      configuration: PoofConfiguration(seed: 7),
+      variationSeed: 7
+    )
+    let erosion = try #require(
+      PoofSourceErosion.stepped(size: size, frameSet: frameSet)
+    )
+
+    #expect(erosion.engulfProgress > 0)
+    #expect(erosion.engulfProgress <= 0.6)
+    #expect(erosion.path(for: erosion.engulfProgress, in: rect).isEmpty)
   }
 
   @Test("Reduce Motion replaces spatial removal with a bounded fade")

@@ -99,6 +99,35 @@ enum PoofSourceCoverAspect: CaseIterable, Hashable, Sendable {
       self = .square
     }
   }
+
+  /// The dimensions an aspect class is solved at.
+  ///
+  /// Cover geometry is generated once against these and mapped onto the real
+  /// bounds per axis, so every consumer of the class must agree on them.
+  var referenceWidth: Double {
+    switch self {
+    case .square: 84
+    case .wide: 132
+    case .tall: 48
+    }
+  }
+
+  var referenceHeight: Double {
+    switch self {
+    case .square: 84
+    case .wide: 48
+    case .tall: 132
+    }
+  }
+
+  /// Keeps each aspect's noise reads out of the others' key space.
+  var coverKeyOffset: UInt64 {
+    switch self {
+    case .square: 0
+    case .wide: 0x1_0000
+    case .tall: 0x2_0000
+    }
+  }
 }
 
 struct PoofSourceCoverGlyph: Equatable, Sendable {
@@ -123,6 +152,9 @@ struct PoofSourceCoverLayout: Equatable, Sendable {
     glyphCount - repairGlyphCount - fringeGlyphCount
   static let cloudGlyphCount = rootGlyphCount
   static let openingGlyphCount = baseGlyphCount + repairGlyphCount
+  /// The inscribed disc a puff contour is trusted to cover, as a fraction of
+  /// its smaller footprint side. Coverage solves size glyphs against this.
+  static let discCoverageRatio = 0.30
 
   private let square: [PoofSourceCoverGlyph]
   private let wide: [PoofSourceCoverGlyph]
@@ -155,7 +187,6 @@ struct PoofFrameSet: Sendable {
   let style: PoofStyle
   let variationSeed: UInt64
   private let poses: [[PoofGlyph]]
-  private let plume: PoofPlume
   private let sourceCoverLayout: PoofSourceCoverLayout?
   let sourceCoverAspect: PoofSourceCoverAspect?
 
@@ -175,30 +206,12 @@ struct PoofFrameSet: Sendable {
     self.style = style
     self.variationSeed = variationSeed
     self.poses = poses
-    // The authored poses seed where puffs start and how big they begin; the
-    // motion between them belongs to the plume, not to a tween.
-    plume = PoofPlume.make(
-      configuration: configuration,
-      style: style,
-      profile: sourceCoverLayout == nil ? .standalone : .progressive,
-      origins: PoofPlume.origins(from: poses),
-      variationSeed: variationSeed
-    )
     self.sourceCoverLayout = sourceCoverLayout
     self.sourceCoverAspect = sourceCoverAspect
   }
 
   func glyphs(for pose: PoofPose) -> [PoofGlyph] {
     poses[pose.rawValue]
-  }
-
-  /// The smoke alive at this progress under smooth motion.
-  func blends(at progress: Double) -> [PoofGlyphBlend] {
-    plume.blends(at: progress)
-  }
-
-  var plumeEngulfProgress: Double {
-    plume.engulfProgress
   }
 
   /// The glyphs generated for an aspect, with no substitution.
@@ -239,17 +252,6 @@ struct PoofFrameSet: Sendable {
 enum PoofSimulation {
   static let frameDuration = 1.0 / 15.0
   static let duration = frameDuration * Double(PoofPose.allCases.count)
-  /// Continuous smoke needs a moment longer to finish thinning out.
-  static let smoothDuration = 0.45
-
-  static func duration(for motion: PoofMotion) -> Double {
-    switch motion {
-    case .stepped:
-      duration
-    case .smooth:
-      smoothDuration
-    }
-  }
 
   private static let referenceSpread = 0.82
   // Stable index angles keep each Snap glyph on one ray across breakup poses.
@@ -309,18 +311,11 @@ enum PoofSimulation {
 
   /// The progress a frame is actually drawn at.
   ///
-  /// Stepped playback holds one pose for a whole frame interval, so collapsing
+  /// Playback holds one pose for a whole frame interval, so collapsing
   /// progress onto the interval keeps SwiftUI from re-rendering the canvas at
   /// display refresh for output that cannot change until the next swap. The
   /// endpoints pass through untouched so they stay transparent.
-  static func drawnProgress(
-    for progress: Double,
-    motion: PoofMotion
-  ) -> Double {
-    guard motion == .stepped else {
-      return progress
-    }
-
+  static func drawnProgress(for progress: Double) -> Double {
     let normalized = normalized(progress)
 
     guard normalized > 0, normalized < 1 else {
@@ -1481,9 +1476,9 @@ enum PoofSimulation {
         seed: geometrySeed,
         variationSeed: seed,
         clusterGlyphs: clusterGlyphs,
-        sourceWidth: 84,
-        sourceHeight: 84,
-        keyOffset: 0
+        sourceWidth: PoofSourceCoverAspect.square.referenceWidth,
+        sourceHeight: PoofSourceCoverAspect.square.referenceHeight,
+        keyOffset: PoofSourceCoverAspect.square.coverKeyOffset
       )
       : []
     let wide =
@@ -1492,9 +1487,9 @@ enum PoofSimulation {
         seed: geometrySeed,
         variationSeed: seed,
         clusterGlyphs: clusterGlyphs,
-        sourceWidth: 132,
-        sourceHeight: 48,
-        keyOffset: 0x1_0000
+        sourceWidth: PoofSourceCoverAspect.wide.referenceWidth,
+        sourceHeight: PoofSourceCoverAspect.wide.referenceHeight,
+        keyOffset: PoofSourceCoverAspect.wide.coverKeyOffset
       )
       : []
     let tall =
@@ -1503,9 +1498,9 @@ enum PoofSimulation {
         seed: geometrySeed,
         variationSeed: seed,
         clusterGlyphs: clusterGlyphs,
-        sourceWidth: 48,
-        sourceHeight: 132,
-        keyOffset: 0x2_0000
+        sourceWidth: PoofSourceCoverAspect.tall.referenceWidth,
+        sourceHeight: PoofSourceCoverAspect.tall.referenceHeight,
+        keyOffset: PoofSourceCoverAspect.tall.coverKeyOffset
       )
       : []
 
@@ -2183,7 +2178,7 @@ enum PoofSimulation {
       let minorScale = min(aspect, 1 / aspect)
       let currentSize = (currentWidth * currentHeight).squareRoot()
       let coverageSize =
-        radius / (0.30 * minorScale)
+        radius / (PoofSourceCoverLayout.discCoverageRatio * minorScale)
       let size =
         if index < coverageCount {
           min(
@@ -2239,7 +2234,7 @@ enum PoofSimulation {
         min(
           sourceWidth * glyph.width,
           sourceHeight * glyph.height
-        ) * 0.30
+        ) * PoofSourceCoverLayout.discCoverageRatio
       )
     }
 

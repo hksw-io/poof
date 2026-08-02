@@ -11,8 +11,52 @@
       WindowGroup {
         PoofDemoView()
       }
-      .defaultSize(width: 720, height: 520)
-      .windowResizability(.contentSize)
+      .defaultSize(width: 880, height: 560)
+      .commands {
+        DemoCommands()
+      }
+    }
+  }
+
+  /// The Poof menu.
+  ///
+  /// The verbs the toolbar offers belong in the menu bar too, with the
+  /// shortcuts a Mac user expects to find there.
+  private struct DemoCommands: Commands {
+    @FocusedValue(\.demoModel) private var model
+
+    var body: some Commands {
+      CommandMenu(
+        Text(
+          "Poof",
+          bundle: #bundle,
+          comment: "Title of the demo's menu-bar menu."
+        )
+      ) {
+        Button {
+          model?.poof()
+        } label: {
+          Text(
+            "Poof",
+            bundle: #bundle,
+            comment: "Button that removes the demo items."
+          )
+        }
+        .keyboardShortcut(.return, modifiers: .command)
+        .disabled(model?.canPoof != true)
+
+        Button {
+          model?.restore()
+        } label: {
+          Text(
+            "Restore",
+            bundle: #bundle,
+            comment: "Button that restores the demo items."
+          )
+        }
+        .keyboardShortcut("r", modifiers: .command)
+        .disabled(model?.canRestore != true)
+      }
     }
   }
 

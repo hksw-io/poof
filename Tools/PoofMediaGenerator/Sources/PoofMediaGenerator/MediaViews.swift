@@ -22,7 +22,7 @@ struct CaptureFrame: Equatable, Sendable {
     CaptureFrame(phase: .empty, delay: 0.90),
   ]
 
-  // A one-second playback makes the motion choices readable in documentation.
+  // A one-second playback makes the style choices readable in documentation.
   // Twenty-five frames also maps cleanly to GIF centisecond delays.
   static let optionSequence =
     [CaptureFrame(phase: .source, delay: 0.75)]
@@ -44,33 +44,29 @@ struct CaptureFrame: Equatable, Sendable {
 struct MediaOption: Identifiable, Sendable {
   static let all = [
     MediaOption(
-      id: "classic-stepped",
+      id: "classic-grayscale",
       style: .classic,
-      motion: .stepped,
       palette: .automatic,
       title: "Classic",
-      detail: "Stepped · Grayscale"
+      detail: "Grayscale"
     ),
     MediaOption(
-      id: "classic-smooth",
-      style: .classic,
-      motion: .smooth,
+      id: "bloom-grayscale",
+      style: .bloom,
       palette: .automatic,
-      title: "Classic",
-      detail: "Smooth · Grayscale"
+      title: "Bloom",
+      detail: "Grayscale"
     ),
     MediaOption(
       id: "bloom-pastel",
       style: .bloom,
-      motion: .smooth,
       palette: .pastel,
       title: "Bloom",
-      detail: "Smooth · Pastel"
+      detail: "Pastel"
     ),
     MediaOption(
       id: "snap-custom",
       style: .snap,
-      motion: .smooth,
       palette: PoofPalette(
         colors: [
           Color(red: 1.00, green: 0.63, blue: 0.52),
@@ -80,13 +76,12 @@ struct MediaOption: Identifiable, Sendable {
         ]
       ),
       title: "Snap",
-      detail: "Smooth · Custom palette"
+      detail: "Custom palette"
     ),
   ]
 
   let id: String
   let style: PoofStyle
-  let motion: PoofMotion
   let palette: PoofPalette
   let title: String
   let detail: String
@@ -176,7 +171,7 @@ struct OptionsPreview: View {
           .font(.system(size: 25, weight: .bold, design: .rounded))
           .foregroundStyle(palette.text)
 
-        Text("Style, motion, and color can be chosen independently")
+        Text("Style and color can be chosen independently")
           .font(.system(size: 14, weight: .medium, design: .rounded))
           .foregroundStyle(palette.secondaryText)
       }
@@ -229,8 +224,7 @@ private struct OptionCard: View {
         side: 158,
         palette: palette,
         style: option.style,
-        poofPalette: option.palette,
-        motion: option.motion
+        poofPalette: option.palette
       )
     }
     .padding(.top, 12)
@@ -255,7 +249,6 @@ private struct PoofStage: View {
   let palette: MediaPalette
   var style = PoofStyle.classic
   var poofPalette = PoofPalette.automatic
-  var motion = PoofMotion.stepped
 
   private var sourceSide: CGFloat {
     side * 0.68
@@ -271,8 +264,7 @@ private struct PoofStage: View {
           progress: progress,
           style: style,
           configuration: Self.configuration,
-          palette: poofPalette,
-          motion: motion
+          palette: poofPalette
         )
         .frame(width: sourceSide, height: sourceSide)
       case .empty:

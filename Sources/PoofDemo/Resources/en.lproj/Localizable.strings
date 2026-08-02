@@ -8,6 +8,9 @@
 /* Short description of the Snap poof style. */
 "A tighter poof with a punchier break." = "A tighter poof with a punchier break.";
 
+/* Heading above the accessibility status rows. */
+"Accessibility" = "Accessibility";
+
 /* Preview option that animates the poof. */
 "Animation" = "Animation";
 
@@ -38,20 +41,26 @@
 /* Label for the poof playback duration slider. */
 "Duration" = "Duration";
 
+/* Label before the playback timer readout. */
+"Elapsed" = "Elapsed";
+
 /* Default poof palette option that uses neutral fills. */
 "Grayscale" = "Grayscale";
 
-/* Status shown when Increased Contrast is disabled. */
-"Increased Contrast off" = "Increased Contrast off";
-
-/* Status shown when Increased Contrast is enabled. */
-"Increased Contrast on" = "Increased Contrast on";
+/* Name of the Increased Contrast accessibility setting. */
+"Increased Contrast" = "Increased Contrast";
 
 /* Appearance option that uses light mode. */
 "Light" = "Light";
 
-/* Label for choosing stepped or smooth poof motion. */
-"Motion" = "Motion";
+/* Status shown when an accessibility setting is disabled. */
+"Off" = "Off";
+
+/* Status shown when an accessibility setting is enabled. */
+"On" = "On";
+
+/* Button that shows or hides the options panel. */
+"Options" = "Options";
 
 /* Label for choosing poof fill colors. */
 "Palette" = "Palette";
@@ -59,8 +68,8 @@
 /* Poof palette option that uses the built-in pastel colors. */
 "Pastel" = "Pastel";
 
-/* Button that removes all three demo items. */
-"Poof all" = "Poof all";
+/* The demo's name: the window title, the menu-bar menu, and the button that removes the items. */
+"Poof" = "Poof";
 
 /* Label for choosing playback or a static poof pose. */
 "Preview" = "Preview";
@@ -68,22 +77,16 @@
 /* Preview option for the dense puffs pose. */
 "Puffs" = "Puffs";
 
-/* Status shown when Reduce Motion is disabled. */
-"Reduce Motion off" = "Reduce Motion off";
-
-/* Status shown when Reduce Motion is enabled. */
-"Reduce Motion on" = "Reduce Motion on";
+/* Name of the Reduce Motion accessibility setting. */
+"Reduce Motion" = "Reduce Motion";
 
 /* Explanation shown when Reduce Motion is enabled. */
 "Reduce Motion replaces spatial poofs with a fade." = "Reduce Motion replaces spatial poofs with a fade.";
 
-/* Status shown when Reduce Transparency is disabled. */
-"Reduce Transparency off" = "Reduce Transparency off";
+/* Name of the Reduce Transparency accessibility setting. */
+"Reduce Transparency" = "Reduce Transparency";
 
-/* Status shown when Reduce Transparency is enabled. */
-"Reduce Transparency on" = "Reduce Transparency on";
-
-/* Button that restores all three demo items. */
+/* Button that restores the demo items. */
 "Restore" = "Restore";
 
 /* Preview option for the final ringlets pose. */
@@ -92,17 +95,11 @@
 /* Name of the rounded-square demo surface. */
 "Rounded square" = "Rounded square";
 
-/* Poof motion option that interpolates between poses. */
-"Smooth" = "Smooth";
-
 /* Name of the punchier modern poof style. */
 "Snap" = "Snap";
 
 /* Name of the star-shaped demo surface. */
 "Star" = "Star";
-
-/* Poof motion option that holds five authored poses. */
-"Stepped" = "Stepped";
 
 /* Label for choosing the source shape to poof. */
 "Surface" = "Surface";
@@ -113,10 +110,7 @@
 /* Short description of the Classic poof style. */
 "The crisp five-pose original." = "The crisp five-pose original.";
 
-/* Description above the poof style comparison. */
-"The original, plus two playful takes designed for today." = "The original, plus two playful takes designed for today.";
-
-/* Heading above the poof style comparison. */
+/* The demo window's subtitle. */
 "Three ways to poof" = "Three ways to poof";
 
 /* Preview option for the sparse wisps pose. */

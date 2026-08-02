@@ -3,9 +3,9 @@ import Foundation
 /// Counter-based seeded noise.
 ///
 /// Every value is a pure function of a seed and a key, so nothing has to
-/// remember what it drew last. That is what keeps a playback repeatable, keeps
-/// it scrubbable, and lets callers skip a draw they turn out not to need
-/// without changing anything downstream.
+/// remember what it drew last. That is what keeps a playback repeatable and
+/// lets callers skip a draw they turn out not to need without changing
+/// anything downstream.
 enum PoofNoise {
   /// A value in `-1...1` for a seed and key.
   static func value(seed: UInt64, key: UInt64) -> Double {
@@ -30,26 +30,6 @@ enum PoofNoise {
     range.lowerBound
       + (range.upperBound - range.lowerBound)
       * unitValue(seed: seed, key: key)
-  }
-
-  /// The quintic smoothstep, zero-sloped at both ends.
-  static func smootherStep(_ amount: Double) -> Double {
-    let amount = min(max(amount, 0), 1)
-    let cubed = amount * amount * amount
-    return cubed * (amount * (amount * 6 - 15) + 10)
-  }
-
-  /// ``smootherStep(_:)`` over an arbitrary interval.
-  static func smootherStep(
-    from start: Double,
-    to end: Double,
-    at amount: Double
-  ) -> Double {
-    guard end > start else {
-      return amount >= end ? 1 : 0
-    }
-
-    return smootherStep((amount - start) / (end - start))
   }
 }
 

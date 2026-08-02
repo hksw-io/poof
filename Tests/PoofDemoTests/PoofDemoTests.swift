@@ -83,7 +83,7 @@
       #expect(DemoPoofStyle.snap.poofStyle == .snap)
     }
 
-    @Test("Demo exposes every palette and motion option")
+    @Test("Demo exposes every palette and appearance option")
     func renderingOptions() {
       #expect(
         DemoPalette.allCases == [
@@ -93,9 +93,10 @@
       )
       #expect(DemoPalette.automatic.poofPalette == .automatic)
       #expect(DemoPalette.pastel.poofPalette == .pastel)
-      #expect(DemoMotion.allCases == [.stepped, .smooth])
-      #expect(DemoMotion.stepped.poofMotion == .stepped)
-      #expect(DemoMotion.smooth.poofMotion == .smooth)
+      #expect(DemoAppearance.allCases == [.system, .light, .dark])
+      #expect(DemoAppearance.system.colorScheme == nil)
+      #expect(DemoAppearance.light.colorScheme == .light)
+      #expect(DemoAppearance.dark.colorScheme == .dark)
     }
 
     @Test("Every demo string reaches the bundle")
@@ -117,11 +118,118 @@
         NSDictionary(contentsOf: url) as? [String: String]
       )
 
-      #expect(strings.count == 40)
+      #expect(strings.count == 38)
 
-      for key in ["Reduce Motion on", "Increased Contrast off", "Classic"] {
+      for key in [
+        "Reduce Motion", "Increased Contrast", "Classic", "Elapsed", "Poof",
+        "Options", "Accessibility", "On", "Off",
+      ] {
         #expect(strings[key] != nil, "missing \(key)")
       }
+    }
+
+    @Test("The playback clock clamps to the playback window")
+    func playbackClock() {
+      let start = Date(timeIntervalSinceReferenceDate: 100)
+
+      // No playback yet reads as zero.
+      #expect(
+        DemoPlaybackClockModel.elapsed(
+          since: nil,
+          at: start,
+          duration: 5
+        ) == 0
+      )
+      // A skewed clock cannot count backward.
+      #expect(
+        DemoPlaybackClockModel.elapsed(
+          since: start,
+          at: start.addingTimeInterval(-1),
+          duration: 5
+        ) == 0
+      )
+      // Mid-playback is the plain interval.
+      #expect(
+        abs(
+          DemoPlaybackClockModel.elapsed(
+            since: start,
+            at: start.addingTimeInterval(2.2),
+            duration: 5
+          ) - 2.2
+        ) < 1e-9
+      )
+      // The readout freezes at the end instead of counting into the
+      // silence after the poof.
+      #expect(
+        DemoPlaybackClockModel.elapsed(
+          since: start,
+          at: start.addingTimeInterval(9),
+          duration: 5
+        ) == 5
+      )
+
+      // The frozen reading is a property of the arithmetic, not of the clock
+      // still ticking: long after the poof ends, the same values come back.
+      // That is what lets the schedule pause when playback finishes.
+      for multiple in [2.0, 20.0] {
+        #expect(
+          DemoPlaybackClockModel.elapsed(
+            since: start,
+            at: start.addingTimeInterval(5 * multiple),
+            duration: 5
+          ) == 5
+        )
+      }
+      #expect(
+        DemoPlaybackClockModel.progress(
+          elapsed: DemoPlaybackClockModel.elapsed(
+            since: start,
+            at: start.addingTimeInterval(100),
+            duration: 5
+          ),
+          duration: 5
+        ) == 1
+      )
+
+      #expect(DemoPlaybackClockModel.progress(elapsed: 0, duration: 5) == 0)
+      #expect(
+        abs(
+          DemoPlaybackClockModel.progress(elapsed: 2.2, duration: 5) - 0.44
+        ) < 1e-9
+      )
+      #expect(DemoPlaybackClockModel.progress(elapsed: 9, duration: 5) == 1)
+      #expect(DemoPlaybackClockModel.progress(elapsed: 1, duration: 0) == 0)
+    }
+
+    @MainActor
+    @Test("The demo model gates poof and restore on what is on screen")
+    func demoModelCommands() {
+      let model = DemoModel()
+
+      // The toolbar button and the menu command read the same state, so they
+      // cannot disagree about which verb is available.
+      #expect(model.isItemVisible)
+      #expect(model.canPoof)
+      #expect(!model.canRestore)
+
+      // A static pose is not a playback, so neither verb applies.
+      model.previewMode = .puffs
+      #expect(!model.canPoof)
+      #expect(!model.canRestore)
+
+      // Restoring what is already present is a no-op, seed included.
+      let seed = model.playbackSeed
+      model.restore()
+      #expect(model.playbackSeed == seed)
+      #expect(model.isItemVisible)
+
+      // Resetting clears the clock without advancing the seed, which is what
+      // a settings change needs.
+      model.previewMode = .animation
+      model.reset()
+      #expect(model.playbackSeed == seed)
+      #expect(model.playbackStart == nil)
+      #expect(!model.isClockRunning)
     }
   }
 

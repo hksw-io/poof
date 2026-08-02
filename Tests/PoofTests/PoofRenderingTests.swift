@@ -82,27 +82,6 @@ struct PoofRenderingTests {
     }
   }
 
-  @Test("Public effect accepts palette and smooth motion")
-  func publicRenderingOptions() throws {
-    let content = PoofEffect(
-      progress: 0.42,
-      style: .snap,
-      configuration: PoofConfiguration(seed: 0x504F_4F46),
-      palette: .pastel,
-      motion: .smooth
-    )
-    .frame(width: 84, height: 84)
-    let renderer = ImageRenderer(content: content)
-    renderer.proposedSize = ProposedViewSize(width: 84, height: 84)
-    renderer.scale = 2
-
-    let image = try #require(renderer.cgImage)
-    let snapshot = PixelSnapshot(image: image)
-
-    #expect(snapshot.statistics.alphaTotal > 0)
-    #expect(snapshot.chromaticPixelCount > 100)
-  }
-
   @Test("Every public style renders all five poses")
   func publicStylesRenderEveryPose() throws {
     let progresses = [0.1, 0.3, 0.5, 0.7, 0.9]
@@ -124,17 +103,8 @@ struct PoofRenderingTests {
     for style in allPoofStyles {
       let first = try #require(snapshot(progress: 0, style: style))
       let last = try #require(snapshot(progress: 1, style: style))
-      let smoothFirst = try #require(
-        snapshot(progress: 0, style: style, motion: .smooth)
-      )
-      let smoothLast = try #require(
-        snapshot(progress: 1, style: style, motion: .smooth)
-      )
-
       #expect(first.statistics.alphaTotal == 0)
       #expect(last.statistics.alphaTotal == 0)
-      #expect(smoothFirst.statistics.alphaTotal == 0)
-      #expect(smoothLast.statistics.alphaTotal == 0)
     }
   }
 
@@ -172,41 +142,6 @@ struct PoofRenderingTests {
       for (previous, current) in zip(images, images.dropFirst()) {
         #expect(current.alphaExcessPixelCount(over: previous) <= 8)
       }
-    }
-  }
-
-  @Test("Smooth progressive removal waits for complete coverage")
-  func smoothProgressiveRemoval() throws {
-    let progresses = [0.0, 0.10, 0.30, 0.50, 0.70, 0.90]
-
-    for style in allPoofStyles {
-      let frames = try #require(
-        progressiveTransitionSnapshots(
-          progresses: progresses,
-          style: style,
-          motion: .smooth,
-          variationSeed: 0x504F_4F46
-        )
-      )
-
-      expectGradualSourceRemoval(frames)
-    }
-
-    for size in [
-      CGSize(width: 132, height: 48),
-      CGSize(width: 48, height: 132),
-    ] {
-      let frames = try #require(
-        progressiveTransitionSnapshots(
-          progresses: progresses,
-          motion: .smooth,
-          width: size.width,
-          height: size.height,
-          variationSeed: 0xCAFE_BABE
-        )
-      )
-
-      expectGradualSourceRemoval(frames)
     }
   }
 
@@ -924,32 +859,29 @@ struct PoofRenderingTests {
   @Test("Progressive frame two is visibly smaller than dense puffs")
   func progressiveSecondPoseIsCompact() throws {
     for style in allPoofStyles {
-      for motion in [PoofMotion.stepped, .smooth] {
-        let clusters = try #require(
-          progressiveSmokeSnapshot(
-            progress: 0.30,
-            style: style,
-            renderScale: 2,
-            motion: motion
-          )
+      let clusters = try #require(
+        progressiveSmokeSnapshot(
+          progress: 0.30,
+          style: style,
+          renderScale: 2
         )
-        let puffs = try #require(
-          progressiveSmokeSnapshot(
-            progress: 0.50,
-            style: style,
-            renderScale: 2,
-            motion: motion
-          )
+      )
+      let puffs = try #require(
+        progressiveSmokeSnapshot(
+          progress: 0.50,
+          style: style,
+          renderScale: 2
         )
-        let clusterBounds = try #require(clusters.statistics.bounds)
-        let puffBounds = try #require(puffs.statistics.bounds)
+      )
+      let clusterBounds = try #require(clusters.statistics.bounds)
+      let puffBounds = try #require(puffs.statistics.bounds)
 
-        #expect(clusterBounds.area * 10 < puffBounds.area * 9)
-        #expect(
-          clusters.statistics.alphaTotal * 10
-            < puffs.statistics.alphaTotal * 9
-        )
-      }
+      // The poses contract at frame two and expand to the dense frame.
+      #expect(clusterBounds.area * 10 < puffBounds.area * 9)
+      #expect(
+        clusters.statistics.alphaTotal * 10
+          < puffs.statistics.alphaTotal * 9
+      )
     }
   }
 
@@ -1330,144 +1262,6 @@ struct PoofRenderingTests {
     }
   }
 
-  @Test("Smooth motion continuously changes between pose anchors")
-  func smoothPoseIntervals() throws {
-    for style in allPoofStyles {
-      let early = try #require(
-        snapshot(
-          progress: 0.21,
-          style: style,
-          motion: .smooth,
-          reducesTransparency: true
-        )
-      )
-      let late = try #require(
-        snapshot(
-          progress: 0.29,
-          style: style,
-          motion: .smooth,
-          reducesTransparency: true
-        )
-      )
-      let intervalDifference = early.normalizedDifference(from: late)
-
-      #expect(intervalDifference > 0.02)
-
-      for midpoint in [0.05, 0.20, 0.40, 0.60, 0.80, 0.95] {
-        let closeBefore = try #require(
-          snapshot(
-            progress: midpoint - 0.001,
-            style: style,
-            motion: .smooth,
-            reducesTransparency: true
-          )
-        )
-        let closeAfter = try #require(
-          snapshot(
-            progress: midpoint + 0.001,
-            style: style,
-            motion: .smooth,
-            reducesTransparency: true
-          )
-        )
-        let closeDifference =
-          closeBefore.normalizedDifference(from: closeAfter)
-
-        #expect(closeDifference > 0)
-        #expect(closeDifference < intervalDifference)
-      }
-    }
-  }
-
-  @Test("Smooth motion preserves draw order across pose anchors")
-  func smoothPoseAnchorContinuity() throws {
-    let epsilon = 0.000_001
-
-    for style in allPoofStyles {
-      for anchor in [0.10, 0.30, 0.50, 0.70, 0.90] {
-        let before = try #require(
-          snapshot(
-            progress: anchor - epsilon,
-            style: style,
-            motion: .smooth,
-            reducesTransparency: true,
-            particleCount: 64,
-            width: 160,
-            height: 160,
-            renderScale: 3
-          )
-        )
-        let after = try #require(
-          snapshot(
-            progress: anchor + epsilon,
-            style: style,
-            motion: .smooth,
-            reducesTransparency: true,
-            particleCount: 64,
-            width: 160,
-            height: 160,
-            renderScale: 3
-          )
-        )
-
-        #expect(before.normalizedDifference(from: after) < 0.001)
-      }
-    }
-  }
-
-  @Test("Smooth motion stays in the stepped field without copying it")
-  func smoothStaysInTheSteppedField() throws {
-    // Smooth used to be required to match stepped within a few points at each
-    // anchor, which is another way of saying it was the poses with a tween
-    // between them. It now has its own trajectories, so what has to hold is
-    // that it reads as the same effect: the same region, a comparable amount
-    // of ink, and a peak in the middle.
-    for style in allPoofStyles {
-      var masses: [Double] = []
-      var steppedWidths: [Int] = []
-      var steppedHeights: [Int] = []
-      var smoothWidths: [Int] = []
-      var smoothHeights: [Int] = []
-
-      for progress in [0.10, 0.30, 0.50, 0.70, 0.90] {
-        let stepped = try #require(
-          snapshot(progress: progress, style: style)
-        )
-        let smooth = try #require(
-          snapshot(
-            progress: progress,
-            style: style,
-            motion: .smooth
-          )
-        )
-        let steppedBounds = try #require(stepped.statistics.bounds)
-        let smoothBounds = try #require(smooth.statistics.bounds)
-
-        steppedWidths.append(steppedBounds.width)
-        steppedHeights.append(steppedBounds.height)
-        smoothWidths.append(smoothBounds.width)
-        smoothHeights.append(smoothBounds.height)
-        masses.append(Double(smooth.statistics.alphaTotal))
-      }
-
-      // Same field, compared at its widest. Pose by pose would just be the
-      // old requirement that smooth track the poses it no longer follows.
-      #expect(
-        (smoothWidths.max() ?? 0)
-          <= Int(Double(steppedWidths.max() ?? 0) * 1.15) + 4
-      )
-      #expect(
-        (smoothHeights.max() ?? 0)
-          <= Int(Double(steppedHeights.max() ?? 0) * 1.15) + 4
-      )
-
-      let peak = try #require(masses.indices.max { masses[$0] < masses[$1] })
-
-      #expect((1...3).contains(peak), "\(style) peaked at \(peak)")
-      #expect(masses[4] < masses[peak])
-    }
-  }
-
   @Test("Later poses lose mass and contract")
   func laterPosesContract() throws {
     let puffs = try #require(snapshot(progress: 0.50))
@@ -1511,7 +1305,6 @@ struct PoofRenderingTests {
           PoofContentRemovalModifier(
             progress: progress,
             contentRemoval: .progressive,
-            motion: .stepped,
             reducesMotion: false,
             frameSet: frameSet
           )
@@ -1718,7 +1511,7 @@ struct PoofRenderingTests {
     }
   }
 
-  @Test("Custom fill colors work across styles, motion, and appearance")
+  @Test("Custom fill colors work across styles and appearance")
   func customPalette() throws {
     let palette = PoofPalette(
       colors: [
@@ -1732,7 +1525,6 @@ struct PoofRenderingTests {
           progress: 0.40,
           style: style,
           palette: palette,
-          motion: .smooth,
           colorScheme: .light,
           reducesTransparency: true
         )
@@ -1742,7 +1534,6 @@ struct PoofRenderingTests {
           progress: 0.40,
           style: style,
           palette: palette,
-          motion: .smooth,
           colorScheme: .light,
           reducesTransparency: true
         )
@@ -1752,7 +1543,6 @@ struct PoofRenderingTests {
           progress: 0.40,
           style: style,
           palette: palette,
-          motion: .smooth,
           colorScheme: .dark,
           reducesTransparency: true
         )
@@ -1843,82 +1633,71 @@ struct PoofRenderingTests {
   @Test("Reduce Motion removes spatial drawing")
   func reduceMotionIsBlank() throws {
     for style in allPoofStyles {
-      for motion in [PoofMotion.stepped, .smooth] {
-        let image = try #require(
-          snapshot(
-            progress: 0.50,
-            style: style,
-            motion: motion,
-            reducesMotion: true
-          )
+      let image = try #require(
+        snapshot(
+          progress: 0.50,
+          style: style,
+          reducesMotion: true
         )
+      )
 
-        #expect(image.statistics.alphaTotal == 0)
-        #expect(image.statistics.bounds == nil)
-      }
+      #expect(image.statistics.alphaTotal == 0)
+      #expect(image.statistics.bounds == nil)
     }
   }
 
   @Test("Reduce Transparency removes haze and strengthens smoke")
   func reduceTransparency() throws {
     for style in allPoofStyles {
-      for motion in [PoofMotion.stepped, .smooth] {
-        let standard = try #require(
-          snapshot(
-            progress: 0.60,
-            style: style,
-            motion: motion
-          )
+      let standard = try #require(
+        snapshot(
+          progress: 0.60,
+          style: style
         )
-        let reduced = try #require(
-          snapshot(
-            progress: 0.60,
-            style: style,
-            motion: motion,
-            reducesTransparency: true
-          )
+      )
+      let reduced = try #require(
+        snapshot(
+          progress: 0.60,
+          style: style,
+          reducesTransparency: true
         )
+      )
 
-        #expect(standard.pixels != reduced.pixels)
-        #expect(
-          reduced.statistics.lowAlphaPixelCount
-            < standard.statistics.lowAlphaPixelCount
-        )
-        #expect(
-          reduced.statistics.averageVisibleAlpha
-            > standard.statistics.averageVisibleAlpha
-        )
-      }
+      #expect(standard.pixels != reduced.pixels)
+      #expect(
+        reduced.statistics.lowAlphaPixelCount
+          < standard.statistics.lowAlphaPixelCount
+      )
+      #expect(
+        reduced.statistics.averageVisibleAlpha
+          > standard.statistics.averageVisibleAlpha
+      )
     }
   }
 
   @Test("Increased Contrast darkens edge detail")
   func increasedContrast() throws {
     for style in allPoofStyles {
-      for motion in [PoofMotion.stepped, .smooth] {
-        let standard = try #require(
-          snapshot(
-            progress: 0.40,
-            style: style,
-            motion: motion,
-            contrast: .standard
-          )
+      let standard = try #require(
+        snapshot(
+          progress: 0.40,
+          style: style,
+          contrast: .standard
         )
-        let increased = try #require(
-          snapshot(
-            progress: 0.40,
-            style: style,
-            motion: motion,
-            contrast: .increased
-          )
+      )
+      let increased = try #require(
+        snapshot(
+          progress: 0.40,
+          style: style,
+          contrast: .increased
         )
+      )
 
-        #expect(standard.pixels != increased.pixels)
-        #expect(
-          increased.statistics.averageLuminance
-            < standard.statistics.averageLuminance
-        )
-      }
+      #expect(standard.pixels != increased.pixels)
+      #expect(
+        increased.statistics.averageLuminance
+          < standard.statistics.averageLuminance
+      )
     }
   }
 
@@ -2474,7 +2253,6 @@ struct PoofRenderingTests {
     progress: Double,
     style: PoofStyle = .classic,
     palette: PoofPalette = .automatic,
-    motion: PoofMotion = .stepped,
     colorScheme: ColorScheme = .light,
     contrast: ColorSchemeContrast = .standard,
     reducesMotion: Bool = false,
@@ -2499,7 +2277,6 @@ struct PoofRenderingTests {
         palette: palette,
         style: style
       ),
-      motion: motion,
       reducesMotion: reducesMotion,
       reducesTransparency: reducesTransparency,
       artScale: artScale,
@@ -2529,7 +2306,6 @@ struct PoofRenderingTests {
     progress: Double,
     style: PoofStyle,
     renderScale: Double,
-    motion: PoofMotion = .stepped,
     variationSeed: UInt64 = 0x504F_4F46,
     sourceSize: CGSize = CGSize(width: 84, height: 84)
   ) -> PixelSnapshot? {
@@ -2551,7 +2327,6 @@ struct PoofRenderingTests {
         contrast: .standard,
         style: style
       ),
-      motion: motion,
       reducesMotion: false,
       reducesTransparency: true,
       artScale: configuration.fieldScale,
@@ -2575,7 +2350,6 @@ struct PoofRenderingTests {
   private func contentRemovalSnapshots(
     progresses: [Double],
     style: PoofStyle = .classic,
-    motion: PoofMotion = .stepped,
     colorScheme: ColorScheme = .light,
     reducesMotion: Bool = false,
     width: Double = 84,
@@ -2591,7 +2365,6 @@ struct PoofRenderingTests {
     let content = ContentRemovalStrip(
       progresses: progresses,
       style: style,
-      motion: motion,
       reducesMotion: reducesMotion,
       width: width,
       height: height,
@@ -2630,7 +2403,6 @@ struct PoofRenderingTests {
   private func progressiveTransitionSnapshots(
     progresses: [Double],
     style: PoofStyle = .classic,
-    motion: PoofMotion = .stepped,
     colorScheme: ColorScheme = .light,
     contrast: ColorSchemeContrast = .standard,
     reducesTransparency: Bool = false,
@@ -2652,7 +2424,6 @@ struct PoofRenderingTests {
     let content = ProgressiveTransitionStrip(
       progresses: progresses,
       style: style,
-      motion: motion,
       contrast: contrast,
       reducesTransparency: reducesTransparency,
       width: width,
@@ -2693,7 +2464,6 @@ struct PoofRenderingTests {
 private struct ContentRemovalStrip: View {
   let progresses: [Double]
   let style: PoofStyle
-  let motion: PoofMotion
   let reducesMotion: Bool
   let width: Double
   let height: Double
@@ -2730,7 +2500,6 @@ private struct ContentRemovalStrip: View {
             PoofContentRemovalModifier(
               progress: progress,
               contentRemoval: .progressive,
-              motion: motion,
               reducesMotion: reducesMotion,
               frameSet: frameSet,
               erosion: frameSet.flatMap {
@@ -2749,7 +2518,6 @@ private struct ContentRemovalStrip: View {
 private struct ProgressiveTransitionStrip: View {
   let progresses: [Double]
   let style: PoofStyle
-  let motion: PoofMotion
   let contrast: ColorSchemeContrast
   let reducesTransparency: Bool
   let width: Double
@@ -2775,7 +2543,6 @@ private struct ProgressiveTransitionStrip: View {
             PoofContentRemovalModifier(
               progress: progress,
               contentRemoval: .progressive,
-              motion: motion,
               reducesMotion: false,
               frameSet: frameSet,
               erosion: PoofSourceErosion.stepped(
@@ -2799,7 +2566,6 @@ private struct ProgressiveTransitionStrip: View {
                   contrast: contrast,
                   style: style
                 ),
-                motion: motion,
                 reducesMotion: false,
                 reducesTransparency: reducesTransparency,
                 artScale: configuration.fieldScale,
@@ -2993,6 +2759,38 @@ private struct PixelSnapshot {
     connectedComponentCount(minimumArea: 4) {
       isSourceBluePixel(at: $0)
     }
+  }
+
+  /// Source pixels that vanished between two frames, split into those covered
+  /// by ink and those left bare — a bare removal is a sliver popping rather
+  /// than smoke consuming.
+  func bareSourceRemovalCount(
+    over previous: PixelSnapshot,
+    alphaFloor: UInt8 = 32
+  ) -> (removed: Int, bare: Int) {
+    guard pixels.count == previous.pixels.count else {
+      return (.max, .max)
+    }
+
+    var removed = 0
+    var bare = 0
+
+    for offset in stride(from: 0, to: pixels.count, by: 4) {
+      guard
+        previous.isSourceBluePixel(at: offset),
+        !isSourceBluePixel(at: offset)
+      else {
+        continue
+      }
+
+      removed += 1
+
+      if pixels[offset + 3] < alphaFloor {
+        bare += 1
+      }
+    }
+
+    return (removed: removed, bare: bare)
   }
 
   func alphaExcessPixelCount(

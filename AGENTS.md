@@ -13,15 +13,11 @@ later.
 - Use current SwiftUI APIs. Do not add deprecated AppKit animation APIs,
   private frameworks, UIKit effects, Core Animation emitters, or timers.
 - Preserve the clean-room five-pose sequence: full cloud, four clusters, dense
-  puffs, sparse wisps, then ringlets. Stepped motion swaps poses without
-  interpolation at 15 frames per second and lasts exactly one-third of a
-  second. It is the default and the faithful recreation. Smooth motion is a
-  continuous plume rather than those poses interpolated, and may run to its own
-  duration.
+  puffs, sparse wisps, then ringlets. Poses swap without interpolation at 15
+  frames per second, and a playback lasts exactly one-third of a second.
 - Keep `PoofSimulation` based on absolute normalized progress. Progress and the
-  playback seed must fully determine the selected pose and its glyphs. A plume
-  particle's whole trajectory is a closed form in progress, seed, and index;
-  nothing integrates and nothing carries state between frames.
+  playback seed must fully determine the selected pose and its glyphs. Nothing
+  integrates and nothing carries state between frames.
 - Choose optional variation once per playback and apply it coherently to every
   pose. An explicit seed must produce repeatable output. Do not add per-frame
   random generation, `hashValue` seeds, or mutable global state.
@@ -36,15 +32,19 @@ later.
   hiding it behind opaque paint. Bites accumulate, so covered pixels carry
   forward by construction and a bite is never given back. The source is gone
   only once the dense pose covers its bounds.
+- Settle path booleans where they are built. `Path.subtracting` is lazy and
+  `applying` discards the cached solve, so a mask left unsettled re-runs the
+  boolean on the main thread every frame. Take erosion steps through `CGPath`
+  in the preparation task.
 - Preserve the accessibility paths: Reduce Motion draws no spatial poses;
   Reduce Transparency removes the blurred shadow; Increased Contrast uses
   stronger outlines and detail marks.
 - Keep Classic and Snap grayscale. Bloom may use stable pastel fills. Use the
   same palette in light and dark appearance, with dark outlines and neutral
   details.
-- Draw Classic with puffs only, in both stepped and smooth motion. Every frame
-  of the original is a bumpy multi-lobe puff; rings, curls, and flecks belong
-  to Bloom and Snap. Size carries the dissipation.
+- Draw Classic with puffs only. Every frame of the original is a bumpy
+  multi-lobe puff; rings, curls, and flecks belong to Bloom and Snap. Size
+  carries the dissipation.
 - Fit the artwork to the canvas it is given. The originals run off their own
   tile; this recreation does not, so ink that reaches past the geometry is
   budgeted rather than assumed.
@@ -59,14 +59,11 @@ later.
 - `Sources/Poof/PoofConfiguration.swift`: public density, reach, padding, and
   playback seed settings.
 - `Sources/Poof/PoofStyle.swift`: public opt-in visual styles.
-- `Sources/Poof/PoofMotion.swift`: public stepped and smooth motion.
 - `Sources/Poof/PoofPalette.swift`: public fill palettes.
 - `Sources/Poof/PoofNoise.swift`: counter-based seeded noise shared by the
-  simulation, the plume, and the erosion.
-- `Sources/Poof/PoofPlume.swift`: closed-form continuous smoke for smooth
-  motion.
+  simulation and the erosion.
 - `Sources/Poof/PoofErosion.swift`: the cumulative bites progressive removal
-  takes out of the source.
+  takes out of the source, stepped along the painted poses.
 - `Sources/Poof/PoofSimulation.swift`: pose selection, seeded breakup
   descriptors, and glyph variation.
 - `Sources/Poof/PoofEffect.swift`: vector paths, palette, and `Canvas`
@@ -89,6 +86,8 @@ later.
 - Add or update tests for behavior changes. Rendering changes need coverage for
   all five pose boundaries, hard swaps, light and dark appearance,
   accessibility settings, endpoints, and more than one render scale.
+- `spreadWidensBreakup` is a known flaky exact-pixel test under parallel load.
+  Rerun it in isolation before treating a failure as real.
 - Test that changing `fieldScale` changes padding without scaling the artwork.
   Test seeded repeatability and coherent unseeded playback variation separately.
 - Use Conventional Commits, such as `feat:`, `fix:`, `test:`, `docs:`, and

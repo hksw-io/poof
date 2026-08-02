@@ -1,126 +1,120 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "Animation" : {
-      "comment" : "Preview option that animates the poof."
+  "sourceLanguage": "en",
+  "strings": {
+    "A soft, full cloud with a cartoony pop.": {
+      "comment": "Short description of the Bloom poof style."
     },
-    "Appearance" : {
-      "comment" : "Label for the demo appearance picker."
+    "A tighter poof with a punchier break.": {
+      "comment": "Short description of the Snap poof style."
     },
-    "A soft, full cloud with a cartoony pop." : {
-      "comment" : "Short description of the Bloom poof style."
+    "Accessibility": {
+      "comment": "Heading above the accessibility status rows."
     },
-    "A tighter poof with a punchier break." : {
-      "comment" : "Short description of the Snap poof style."
+    "Animation": {
+      "comment": "Preview option that animates the poof."
     },
-    "Bloom" : {
-      "comment" : "Name of the rounder modern poof style."
+    "Appearance": {
+      "comment": "Label for the demo appearance picker."
     },
-    "Capsule" : {
-      "comment" : "Name of the wide capsule demo surface."
+    "Bloom": {
+      "comment": "Name of the rounder modern poof style."
     },
-    "Circle" : {
-      "comment" : "Name of the circular demo surface."
+    "Capsule": {
+      "comment": "Name of the wide capsule demo surface."
     },
-    "Classic" : {
-      "comment" : "Name of the clean-room original poof style."
+    "Circle": {
+      "comment": "Name of the circular demo surface."
     },
-    "Cloud" : {
-      "comment" : "Preview option for the full cloud pose."
+    "Classic": {
+      "comment": "Name of the clean-room original poof style."
     },
-    "Clusters" : {
-      "comment" : "Preview option for the four-cluster pose."
+    "Cloud": {
+      "comment": "Preview option for the full cloud pose."
     },
-    "Dark" : {
-      "comment" : "Appearance option that uses dark mode."
+    "Clusters": {
+      "comment": "Preview option for the four-cluster pose."
     },
-    "Duration" : {
-      "comment" : "Label for the poof playback duration slider."
+    "Dark": {
+      "comment": "Appearance option that uses dark mode."
     },
-    "Increased Contrast off" : {
-      "comment" : "Status shown when Increased Contrast is disabled."
+    "Duration": {
+      "comment": "Label for the poof playback duration slider."
     },
-    "Increased Contrast on" : {
-      "comment" : "Status shown when Increased Contrast is enabled."
+    "Elapsed": {
+      "comment": "Label before the playback timer readout."
     },
-    "Light" : {
-      "comment" : "Appearance option that uses light mode."
+    "Grayscale": {
+      "comment": "Default poof palette option that uses neutral fills."
     },
-    "Grayscale" : {
-      "comment" : "Default poof palette option that uses neutral fills."
+    "Increased Contrast": {
+      "comment": "Name of the Increased Contrast accessibility setting."
     },
-    "Motion" : {
-      "comment" : "Label for choosing stepped or smooth poof motion."
+    "Light": {
+      "comment": "Appearance option that uses light mode."
     },
-    "Palette" : {
-      "comment" : "Label for choosing poof fill colors."
+    "Off": {
+      "comment": "Status shown when an accessibility setting is disabled."
     },
-    "Pastel" : {
-      "comment" : "Poof palette option that uses the built-in pastel colors."
+    "On": {
+      "comment": "Status shown when an accessibility setting is enabled."
     },
-    "Poof all" : {
-      "comment" : "Button that removes all three demo items."
+    "Options": {
+      "comment": "Button that shows or hides the options panel."
     },
-    "Preview" : {
-      "comment" : "Label for choosing playback or a static poof pose."
+    "Palette": {
+      "comment": "Label for choosing poof fill colors."
     },
-    "Puffs" : {
-      "comment" : "Preview option for the dense puffs pose."
+    "Pastel": {
+      "comment": "Poof palette option that uses the built-in pastel colors."
     },
-    "Reduce Motion off" : {
-      "comment" : "Status shown when Reduce Motion is disabled."
+    "Poof": {
+      "comment": "The demo's name: the window title, the menu-bar menu, and the button that removes the items."
     },
-    "Reduce Motion on" : {
-      "comment" : "Status shown when Reduce Motion is enabled."
+    "Preview": {
+      "comment": "Label for choosing playback or a static poof pose."
     },
-    "Reduce Transparency off" : {
-      "comment" : "Status shown when Reduce Transparency is disabled."
+    "Puffs": {
+      "comment": "Preview option for the dense puffs pose."
     },
-    "Reduce Transparency on" : {
-      "comment" : "Status shown when Reduce Transparency is enabled."
+    "Reduce Motion": {
+      "comment": "Name of the Reduce Motion accessibility setting."
     },
-    "Reduce Motion replaces spatial poofs with a fade." : {
-      "comment" : "Explanation shown when Reduce Motion is enabled."
+    "Reduce Motion replaces spatial poofs with a fade.": {
+      "comment": "Explanation shown when Reduce Motion is enabled."
     },
-    "Restore" : {
-      "comment" : "Button that restores all three demo items."
+    "Reduce Transparency": {
+      "comment": "Name of the Reduce Transparency accessibility setting."
     },
-    "Ringlets" : {
-      "comment" : "Preview option for the final ringlets pose."
+    "Restore": {
+      "comment": "Button that restores the demo items."
     },
-    "Rounded square" : {
-      "comment" : "Name of the rounded-square demo surface."
+    "Ringlets": {
+      "comment": "Preview option for the final ringlets pose."
     },
-    "Smooth" : {
-      "comment" : "Poof motion option that interpolates between poses."
+    "Rounded square": {
+      "comment": "Name of the rounded-square demo surface."
     },
-    "Snap" : {
-      "comment" : "Name of the punchier modern poof style."
+    "Snap": {
+      "comment": "Name of the punchier modern poof style."
     },
-    "Star" : {
-      "comment" : "Name of the star-shaped demo surface."
+    "Star": {
+      "comment": "Name of the star-shaped demo surface."
     },
-    "Stepped" : {
-      "comment" : "Poof motion option that holds five authored poses."
+    "Surface": {
+      "comment": "Label for choosing the source shape to poof."
     },
-    "Surface" : {
-      "comment" : "Label for choosing the source shape to poof."
+    "System": {
+      "comment": "Appearance option that follows the system."
     },
-    "System" : {
-      "comment" : "Appearance option that follows the system."
+    "The crisp five-pose original.": {
+      "comment": "Short description of the Classic poof style."
     },
-    "The crisp five-pose original." : {
-      "comment" : "Short description of the Classic poof style."
+    "Three ways to poof": {
+      "comment": "The demo window's subtitle."
     },
-    "The original, plus two playful takes designed for today." : {
-      "comment" : "Description above the poof style comparison."
-    },
-    "Three ways to poof" : {
-      "comment" : "Heading above the poof style comparison."
-    },
-    "Wisps" : {
-      "comment" : "Preview option for the sparse wisps pose."
+    "Wisps": {
+      "comment": "Preview option for the sparse wisps pose."
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

@@ -14,7 +14,6 @@ public struct PoofEffect: View {
   private let style: PoofStyle
   private let configuration: PoofConfiguration
   private let palette: PoofPalette
-  private let motion: PoofMotion
 
   /// Creates a poof at the supplied progress.
   ///
@@ -25,18 +24,15 @@ public struct PoofEffect: View {
   ///   - progress: Absolute normalized playback progress.
   ///   - configuration: The poof's density, spread, overscan, and seed.
   ///   - palette: Fill colors for the smoke.
-  ///   - motion: Stepped or smoothly interpolated pose changes.
   public init(
     progress: Double,
     configuration: PoofConfiguration = .standard,
-    palette: PoofPalette = .automatic,
-    motion: PoofMotion = .stepped
+    palette: PoofPalette = .automatic
   ) {
     self.progress = progress
     style = .classic
     self.configuration = configuration
     self.palette = palette
-    self.motion = motion
   }
 
   /// Creates a styled poof at the supplied progress.
@@ -49,19 +45,16 @@ public struct PoofEffect: View {
   ///   - style: The visual character of the poof.
   ///   - configuration: The poof's density, spread, overscan, and seed.
   ///   - palette: Fill colors for the smoke.
-  ///   - motion: Stepped or smoothly interpolated pose changes.
   public init(
     progress: Double,
     style: PoofStyle,
     configuration: PoofConfiguration = .standard,
-    palette: PoofPalette = .automatic,
-    motion: PoofMotion = .stepped
+    palette: PoofPalette = .automatic
   ) {
     self.progress = progress
     self.style = style
     self.configuration = configuration
     self.palette = palette
-    self.motion = motion
   }
 
   public var body: some View {
@@ -74,7 +67,6 @@ public struct PoofEffect: View {
         palette: palette,
         style: style
       ),
-      motion: motion,
       reducesMotion: reducesMotion,
       reducesTransparency: reducesTransparency,
       artScale: 1,
@@ -90,7 +82,6 @@ struct PoofPlayback: View {
   let style: PoofStyle
   let configuration: PoofConfiguration
   let palette: PoofResolvedPalette
-  let motion: PoofMotion
   let reducesMotion: Bool
   let reducesTransparency: Bool
   let artScale: Double
@@ -107,7 +98,6 @@ struct PoofPlayback: View {
     PoofCanvas(
       progress: progress,
       palette: palette,
-      motion: motion,
       reducesMotion: reducesMotion,
       reducesTransparency: reducesTransparency,
       artScale: artScale,
@@ -166,7 +156,6 @@ struct PoofCanvas: View {
   var progress: Double
 
   @AnimatableIgnored var palette: PoofResolvedPalette
-  @AnimatableIgnored var motion: PoofMotion = .stepped
   @AnimatableIgnored var reducesMotion: Bool
   @AnimatableIgnored var reducesTransparency: Bool
   @AnimatableIgnored var artScale: Double
@@ -179,7 +168,6 @@ struct PoofCanvas: View {
     PreparedPoofCanvas(
       progress: progress,
       palette: palette,
-      motion: motion,
       reducesMotion: reducesMotion,
       reducesTransparency: reducesTransparency,
       artScale: artScale,
@@ -194,7 +182,6 @@ struct PoofCanvas: View {
 private struct PreparedPoofCanvas: View {
   let progress: Double
   let palette: PoofResolvedPalette
-  let motion: PoofMotion
   let reducesMotion: Bool
   let reducesTransparency: Bool
   let artScale: Double
@@ -204,24 +191,12 @@ private struct PreparedPoofCanvas: View {
   let sourceSize: CGSize?
 
   var body: some View {
-    let isSmooth = motion == .smooth
-    let pose =
-      isSmooth
-      ? nil
-      : PoofSimulation.pose(for: progress)
-    // Resolve the plume before Canvas drawing so its callback only turns
+    let pose = PoofSimulation.pose(for: progress)
+    // Progressive playback hands the breakup poses on at the scale the cover
+    // reached, resolved before Canvas drawing so its callback only turns
     // bounded, deterministic descriptors into paths.
-    let smoothGlyphBlends: [PoofGlyphBlend]? =
-      if isSmooth, let frameSet {
-        frameSet.blends(at: progress)
-      } else {
-        nil
-      }
-    // Stepped progressive playback hands the breakup poses on at the scale the
-    // cover reached, resolved here so the Canvas callback only draws.
     let progressiveBreakupBlends: [PoofGlyphBlend]? =
-      if !isSmooth,
-        occludesSource,
+      if occludesSource,
         let pose,
         let frameSet,
         let sourceSize,
@@ -251,7 +226,7 @@ private struct PreparedPoofCanvas: View {
         return
       }
 
-      guard isSmooth || pose != nil else {
+      guard pose != nil else {
         return
       }
 
@@ -284,9 +259,7 @@ private struct PreparedPoofCanvas: View {
           artSide: artSide
         )
       let glyphBlends: [PoofGlyphBlend] =
-        if isSmooth {
-          smoothGlyphBlends ?? []
-        } else if let progressiveBreakupBlends {
+        if let progressiveBreakupBlends {
           progressiveBreakupBlends
         } else if let pose {
           PoofArtwork.renderedGlyphBlends(
@@ -298,13 +271,13 @@ private struct PreparedPoofCanvas: View {
           []
         }
       let clusterDetailWeight =
-        if !occludesSource, !isSmooth, pose == .clusters {
+        if !occludesSource, pose == .clusters {
           1.0
         } else {
           0.0
         }
       let cloudDetailWeight =
-        if !occludesSource, !isSmooth, pose == .cloud {
+        if !occludesSource, pose == .cloud {
           1.0
         } else {
           0.0
@@ -312,7 +285,6 @@ private struct PreparedPoofCanvas: View {
       var shadowContext = context
 
       if occludesSource,
-        !isSmooth,
         let pose,
         pose == .cloud || pose == .clusters || pose == .puffs,
         let sourceRect
@@ -387,10 +359,8 @@ private struct PreparedPoofCanvas: View {
           lineJoin: .round
         )
         let opacity =
-          if reducesTransparency, motion == .stepped {
+          if reducesTransparency {
             max(glyph.opacity, 0.88)
-          } else if reducesTransparency {
-            min(glyph.opacity * 1.12, 1)
           } else {
             glyph.opacity
           }

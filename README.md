@@ -27,9 +27,8 @@ the deprecated `NSAnimationEffect` API or ship copied system assets.
   </tr>
 </table>
 
-By default, the animation swaps through five drawn poses at 15 frames per
-second, one-third of a second in all. Continuous motion is available when the
-hard pose changes don't fit the interaction.
+The animation swaps through five drawn poses at 15 frames per second,
+one-third of a second in all.
 
 ## Requirements
 
@@ -45,13 +44,13 @@ In Xcode, choose **File → Add Package Dependencies** and enter:
 https://github.com/hksw-io/poof.git
 ```
 
-Set the dependency rule to **Up to Next Major Version** starting at `1.2.0`.
+Set the dependency rule to **Up to Next Major Version** starting at `1.0.0`.
 
 From the root of another Swift package, SwiftPM can add Poof and link its
 library product to a target:
 
 ```sh
-swift package add-dependency https://github.com/hksw-io/poof.git --from 1.2.0
+swift package add-dependency https://github.com/hksw-io/poof.git --from 1.0.0
 swift package add-target-dependency Poof YourTarget --package poof
 ```
 
@@ -63,7 +62,7 @@ For a package manifest, add the package and product dependency:
 dependencies: [
   .package(
     url: "https://github.com/hksw-io/poof.git",
-    from: "1.2.0"
+    from: "1.0.0"
   )
 ],
 targets: [
@@ -140,7 +139,7 @@ Pass a style when you want something other than the classic poof:
 .transition(.poof(style: .bloom))
 ```
 
-Color and motion are separate from style. Every style is grayscale by default.
+Color is separate from style. Every style is grayscale by default.
 Pass `.pastel` or your own colors when the removal should be colorful:
 
 ```swift
@@ -157,8 +156,7 @@ RoundedRectangle(cornerRadius: 16)
   .transition(
     .poof(
       style: .snap,
-      palette: candy,
-      motion: .smooth
+      palette: candy
     )
   )
 ```
@@ -166,30 +164,19 @@ RoundedRectangle(cornerRadius: 16)
 `PoofPalette.automatic` and `.monochrome` both use the default grayscale fills.
 Color is always opt-in through `.pastel` or `PoofPalette(colors:)`.
 
-`PoofMotion.stepped` preserves the five hard pose changes at 15 frames per
-second. It is the recreation of the original and the default.
-
-`.smooth` is not those poses interpolated. Each puff is born at its own moment,
-travels its own path, expands as it goes, and thins away rather than shrinking
-out; the poses only decide where puffs start, how large they begin, and in what
-order they arrive. Because continuous smoke spends its last moments thinning,
-`.smooth` reads as clipped at one-third of a second. Pair it with
-`Animation.poof(motion:)` to give it the longer timing it wants, or
-`Animation.poof(duration:)` to choose your own:
+Bare `.poof` keeps the original one-third-second timing. Use
+`Animation.poof(duration:)` when a slower playback suits the interaction:
 
 ```swift
-withAnimation(.poof(motion: .smooth)) {
+withAnimation(.poof(duration: 1)) {
   isVisible = false
 }
 ```
 
-Bare `.poof` keeps the original one-third-second timing whichever motion you
-pick.
-
 ### Options at a glance
 
 This comparison uses the same fixed seed in every card, so the differences come
-from style, motion, and palette. The playback is slowed to one second here; the
+from style and palette. The playback is slowed to one second here; the
 library still plays each poof in one-third of a second.
 
 <picture>
@@ -197,7 +184,7 @@ library still plays each poof in one-third of a second.
   <source media="(prefers-reduced-motion: reduce)" srcset="Documentation/Media/poof-options-light.png">
   <source media="(prefers-color-scheme: dark)" srcset="Documentation/Media/poof-options-dark.gif">
   <source media="(prefers-color-scheme: light)" srcset="Documentation/Media/poof-options-light.gif">
-  <img src="Documentation/Media/poof-options-light.gif" alt="Four Poof animations comparing stepped and smooth motion with grayscale, pastel, and custom palettes" width="940">
+  <img src="Documentation/Media/poof-options-light.gif" alt="Four Poof animations comparing the Classic, Bloom, and Snap styles with grayscale, pastel, and custom palettes" width="940">
 </picture>
 
 The default `.immediate` removal hides the source as playback begins. Use
@@ -259,8 +246,7 @@ struct PoofScrubber: View {
         progress: progress,
         style: .snap,
         configuration: PoofConfiguration(seed: 42),
-        palette: .pastel,
-        motion: .smooth
+        palette: .pastel
       )
       .frame(width: 120, height: 120)
 
@@ -272,7 +258,7 @@ struct PoofScrubber: View {
 }
 ```
 
-The `style`, `palette`, and `motion` arguments are optional. `PoofEffect` draws
+The `style` and `palette` arguments are optional. `PoofEffect` draws
 only the smoke, and values at either endpoint draw nothing.
 When building a custom removal interaction, the caller is responsible for
 hiding the source view, disabling hit testing, and removing it from the
@@ -309,12 +295,13 @@ the drawing field.
 
 ## Performance
 
-Poof generates seeded glyph descriptors once at playback start. Stepped motion
-selects one pose from absolute progress; smooth motion evaluates at most 64
-precomputed tracks. Both draw in one `Canvas`, with no timer, per-frame random
-work, or SwiftUI view per glyph. Glyph count and field size stay bounded.
-Progressive removal prepares coverage only for the source's laid-out aspect
-ratio.
+Poof generates seeded glyph descriptors once at playback start, and selects one
+pose from absolute progress. Drawing happens in one `Canvas`, with no timer,
+per-frame random work, or SwiftUI view per glyph. Glyph count and field size
+stay bounded. Progressive removal prepares coverage only for the source's
+laid-out aspect ratio, and solves its mask off the main thread — including the
+path booleans, which are settled at build time rather than left for the
+render pass to evaluate.
 
 ## Clean-room scope
 
@@ -334,9 +321,9 @@ Run the macOS demo:
 make run
 ```
 
-The demo applies palette and motion settings to every style at once. Its
-duration slider ranges from the production one-third-second timing to five
-seconds for close inspection.
+The demo applies surface, palette, and appearance settings to every style at
+once. Its duration slider ranges from the production one-third-second timing to
+five seconds for close inspection.
 
 Run formatting checks, the debug and release package tests, and the media
 generator tests:

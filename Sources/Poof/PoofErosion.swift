@@ -118,28 +118,53 @@ struct PoofSourceErosion: Equatable, Sendable {
       // the cover overlaps everywhere by design.
       let visible = Path(rect).subtracting(eaten, eoFill: false)
 
-      steps.append(normalized(visible, in: rect))
+      steps.append(settled(normalized(visible, in: rect)))
     }
 
     return PoofSourceErosion(steps: steps)
+  }
+
+  /// The same region, with its boolean already solved.
+  ///
+  /// A `Path` boolean is lazy: `subtracting` only records the operation, and
+  /// the solve runs when something first asks for a `CGPath`. Worse, the
+  /// result is cached on the path that was asked, and ``path(for:in:)`` hands
+  /// back a fresh `applying` copy every frame — so an unsettled step re-solves
+  /// on the main thread for as long as it is on screen. Measured on a
+  /// playback's worth of steps, that is seconds of main-thread time inside
+  /// `NSHostingView.layout()`, enough to hang the window.
+  ///
+  /// Going through `CGPath` here runs the solve once, on whichever thread
+  /// builds the erosion — which is off the main one by construction. It also
+  /// settles `isEmpty`, which reads `false` on a lazily emptied path and is
+  /// what ``engulfProgress`` and the retirement guard both ask.
+  private static func settled(_ path: Path) -> Path {
+    Path(path.cgPath)
   }
 
   /// One puff's bite, held just inside the puff that paints over it.
   private static func bite(
     for element: PoofArtwork.SourceCoverElement
   ) -> Path {
-    element.path.applying(
+    bite(path: element.path, center: element.center)
+  }
+
+  private static func bite(
+    path: Path,
+    center: CGPoint
+  ) -> Path {
+    path.applying(
       CGAffineTransform(
-        translationX: -element.center.x,
-        y: -element.center.y
+        translationX: -center.x,
+        y: -center.y
       )
       .concatenating(
         CGAffineTransform(scaleX: biteScale, y: biteScale)
       )
       .concatenating(
         CGAffineTransform(
-          translationX: element.center.x,
-          y: element.center.y
+          translationX: center.x,
+          y: center.y
         )
       )
     )

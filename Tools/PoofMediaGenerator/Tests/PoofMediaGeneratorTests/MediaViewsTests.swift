@@ -31,13 +31,12 @@ struct MediaViewsTests {
     )
   }
 
-  @Test("Option cards cover motion, style, and color choices")
+  @Test("Option cards cover style and color choices")
   func optionCardsCoverChoices() {
     let options = MediaOption.all
 
     #expect(options.count == 4)
-    #expect(options.map(\.motion) == [.stepped, .smooth, .smooth, .smooth])
-    #expect(options.map(\.style) == [.classic, .classic, .bloom, .snap])
+    #expect(options.map(\.style) == [.classic, .bloom, .bloom, .snap])
     #expect(options[0].palette == .automatic)
     #expect(options[1].palette == .automatic)
     #expect(options[2].palette == .pastel)
