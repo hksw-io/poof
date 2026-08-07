@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0 - 2026-08-08
+
+- Adds `View.poof(at:size:style:configuration:palette:trigger:)` for independent
+  poofs at local points. Rapid triggers can overlap without removing, disabling,
+  or adding accessibility content to the source view.
+- Keeps every playback on the original one-third-second clock. The deprecated
+  `Animation.poof(duration:)` overload remains available for compatibility and
+  uses the fixed timing.
+
 ## 1.0.0 - 2026-08-02
 
 Poof brings a clean-room take on AppKit's former disappearing-item effect to

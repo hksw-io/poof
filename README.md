@@ -45,13 +45,13 @@ In Xcode, choose **File → Add Package Dependencies** and enter:
 https://github.com/hksw-io/poof.git
 ```
 
-Set the dependency rule to **Up to Next Major Version** starting at `1.0.0`.
+Set the dependency rule to **Up to Next Major Version** starting at `1.1.0`.
 
 From the root of another Swift package, SwiftPM can add Poof and link its
 library product to a target:
 
 ```sh
-swift package add-dependency https://github.com/hksw-io/poof.git --from 1.0.0
+swift package add-dependency https://github.com/hksw-io/poof.git --from 1.1.0
 swift package add-target-dependency Poof YourTarget --package poof
 ```
 
@@ -63,7 +63,7 @@ For a package manifest, add the package and product dependency:
 dependencies: [
   .package(
     url: "https://github.com/hksw-io/poof.git",
-    from: "1.0.0"
+    from: "1.1.0"
   )
 ],
 targets: [
@@ -298,8 +298,8 @@ accessibility tree. Use `.transition(.poof())` for the built-in behavior.
 
 ## Accessibility and appearance
 
-- Reduce Motion makes `PoofTransition` fade the source view and suppresses the
-  smoke. A standalone `PoofEffect` suppresses the smoke.
+- Reduce Motion makes `PoofTransition` fade the source view. Point-triggered
+  poofs and standalone `PoofEffect` views draw no smoke.
 - Reduce Transparency removes the soft shadow and keeps small shapes legible.
 - Increased Contrast strengthens the outline and internal marks.
 - Built-in colors stay the same in light and dark appearance. Custom SwiftUI
