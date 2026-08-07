@@ -6,8 +6,6 @@ import UniformTypeIdentifiers
 enum StillWriter {
   enum WriteError: Error {
     case cannotCreateDestination
-    case cannotCreateImage
-    case cannotCreateSource
     case cannotFinalize
   }
 
