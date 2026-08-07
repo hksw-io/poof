@@ -141,7 +141,7 @@
       ScrollView {
         Grid(horizontalSpacing: 16, verticalSpacing: 16) {
           GridRow {
-            ForEach(DemoPoofStyle.allCases) { style in
+            ForEach(DemoPoofStyle.allCases, id: \.self) { style in
               DemoStylePreview(style: style, model: model)
             }
           }
@@ -266,7 +266,7 @@
       Form {
         Section {
           Picker(selection: $model.previewMode) {
-            ForEach(DemoPreviewMode.allCases) { mode in
+            ForEach(DemoPreviewMode.allCases, id: \.self) { mode in
               Text(mode.title)
                 .tag(mode)
             }
@@ -275,7 +275,7 @@
           }
 
           Picker(selection: $model.surface) {
-            ForEach(DemoSurface.allCases) { surface in
+            ForEach(DemoSurface.allCases, id: \.self) { surface in
               Text(surface.title)
                 .tag(surface)
             }
@@ -286,7 +286,7 @@
 
         Section {
           Picker(selection: $model.palette) {
-            ForEach(DemoPalette.allCases) { palette in
+            ForEach(DemoPalette.allCases, id: \.self) { palette in
               Text(palette.title)
                 .tag(palette)
             }
@@ -295,7 +295,7 @@
           }
 
           Picker(selection: $model.appearance) {
-            ForEach(DemoAppearance.allCases) { appearance in
+            ForEach(DemoAppearance.allCases, id: \.self) { appearance in
               Text(appearance.title)
                 .tag(appearance)
             }
@@ -370,14 +370,10 @@
     }
   }
 
-  enum DemoPoofStyle: CaseIterable, Hashable, Identifiable {
+  enum DemoPoofStyle: CaseIterable, Hashable {
     case classic
     case bloom
     case snap
-
-    var id: Self {
-      self
-    }
 
     var poofStyle: PoofStyle {
       switch self {
@@ -413,13 +409,9 @@
     }
   }
 
-  enum DemoPalette: CaseIterable, Hashable, Identifiable {
+  enum DemoPalette: CaseIterable, Hashable {
     case automatic
     case pastel
-
-    var id: Self {
-      self
-    }
 
     var poofPalette: PoofPalette {
       switch self {
@@ -440,15 +432,11 @@
     }
   }
 
-  enum DemoSurface: CaseIterable, Hashable, Identifiable {
+  enum DemoSurface: CaseIterable, Hashable {
     case roundedSquare
     case circle
     case capsule
     case star
-
-    var id: Self {
-      self
-    }
 
     var size: CGSize {
       switch self {
@@ -473,17 +461,13 @@
     }
   }
 
-  enum DemoPreviewMode: CaseIterable, Hashable, Identifiable {
+  enum DemoPreviewMode: CaseIterable, Hashable {
     case animation
     case cloud
     case clusters
     case puffs
     case wisps
     case ringlets
-
-    var id: Self {
-      self
-    }
 
     var isPlayback: Bool {
       self == .animation
@@ -524,14 +508,10 @@
     }
   }
 
-  enum DemoAppearance: CaseIterable, Hashable, Identifiable {
+  enum DemoAppearance: CaseIterable, Hashable {
     case system
     case light
     case dark
-
-    var id: Self {
-      self
-    }
 
     var colorScheme: ColorScheme? {
       switch self {

@@ -34,9 +34,6 @@
           / DemoSurface.capsule.size.height
           > 1.4
       )
-      #expect(
-        DemoSurface.allCases.map(\.id) == DemoSurface.allCases
-      )
     }
 
     @Test("Static poses remain separate from playback modes")
