@@ -12,13 +12,63 @@ struct PoofMediaGenerator {
     CaptureFrame.optionSequence.count / 2
 
   @MainActor
-  static func main() throws {
-    let outputDirectory = try outputDirectory(from: CommandLine.arguments)
+  static func main() async throws {
+    let request = try request(from: CommandLine.arguments)
     try FileManager.default.createDirectory(
-      at: outputDirectory,
+      at: request.outputDirectory,
       withIntermediateDirectories: true
     )
 
+    switch request.kind {
+    case .documentation:
+      try documentation(in: request.outputDirectory)
+    case .social:
+      try await social(in: request.outputDirectory)
+    }
+  }
+
+  /// The clips for a social post.
+  ///
+  /// These are deliberately not part of `make media`: they are not committed,
+  /// nothing pixel-compares them, and they are cut for a feed rather than for
+  /// the README.
+  @MainActor
+  private static func social(in outputDirectory: URL) async throws {
+    let clips:
+      [(name: String, size: CGSize, frames: [CaptureFrame], view: (CaptureFrame) -> AnyView)] = [
+        (
+          "poof-grid", SocialGrid.size, SocialSequence.grid,
+          { AnyView(SocialGrid(frame: $0)) }
+        ),
+        (
+          "poof-hero", SocialHero.size, SocialSequence.hero,
+          { AnyView(SocialHero(frame: $0)) }
+        ),
+      ]
+
+    for clip in clips {
+      let frames = try render(
+        clip.frames,
+        size: clip.size,
+        content: clip.view
+      )
+      let videoURL = outputDirectory.appending(path: "\(clip.name).mp4")
+
+      try await VideoWriter.write(
+        frames.map { VideoFrame(image: $0.image, duration: $0.delay) },
+        to: videoURL,
+        size: clip.size
+      )
+      print("Wrote \(videoURL.path(percentEncoded: false))")
+
+      let gifURL = outputDirectory.appending(path: "\(clip.name).gif")
+      try GIFWriter.write(frames, to: gifURL)
+      print("Wrote \(gifURL.path(percentEncoded: false))")
+    }
+  }
+
+  @MainActor
+  private static func documentation(in outputDirectory: URL) throws {
     for appearance in [ColorScheme.light, .dark] {
       let suffix = appearance == .light ? "light" : "dark"
       let macGIFURL = outputDirectory.appending(
@@ -67,7 +117,21 @@ struct PoofMediaGenerator {
     frames captureFrames: [CaptureFrame] = CaptureFrame.sequence,
     content: (CaptureFrame) -> Content
   ) throws -> [GIFFrame] {
-    let frames = try captureFrames.map { frame in
+    let frames = try render(captureFrames, size: size, content: content)
+
+    try GIFWriter.write(frames, to: url)
+    print("Wrote \(url.path(percentEncoded: false))")
+
+    return frames
+  }
+
+  @MainActor
+  private static func render<Content: View>(
+    _ captureFrames: [CaptureFrame],
+    size: CGSize,
+    content: (CaptureFrame) -> Content
+  ) throws -> [GIFFrame] {
+    try captureFrames.map { frame in
       let view = content(frame)
         .frame(width: size.width, height: size.height)
       let renderer = ImageRenderer(content: view)
@@ -77,35 +141,50 @@ struct PoofMediaGenerator {
       renderer.colorMode = .nonLinear
 
       guard let image = renderer.cgImage else {
-        throw GeneratorError.cannotRender(url.lastPathComponent)
+        throw GeneratorError.cannotRender("\(size)")
       }
 
       return GIFFrame(image: image, delay: frame.delay)
     }
-
-    try GIFWriter.write(frames, to: url)
-    print("Wrote \(url.path(percentEncoded: false))")
-
-    return frames
   }
 
-  private static func outputDirectory(
-    from arguments: [String]
-  ) throws -> URL {
+  struct Request {
+    enum Kind {
+      case documentation
+      case social
+    }
+
+    let kind: Kind
+    let outputDirectory: URL
+  }
+
+  static func request(from arguments: [String]) throws -> Request {
     let arguments = Array(arguments.dropFirst())
 
     if arguments.isEmpty {
-      return URL(
-        filePath: "Documentation/Media",
-        directoryHint: .isDirectory
+      return Request(
+        kind: .documentation,
+        outputDirectory: URL(
+          filePath: "Documentation/Media",
+          directoryHint: .isDirectory
+        )
       )
     }
 
-    guard arguments.count == 2, arguments[0] == "--output" else {
+    guard arguments.count == 2 else {
       throw GeneratorError.usage
     }
 
-    return URL(filePath: arguments[1], directoryHint: .isDirectory)
+    let directory = URL(filePath: arguments[1], directoryHint: .isDirectory)
+
+    switch arguments[0] {
+    case "--output":
+      return Request(kind: .documentation, outputDirectory: directory)
+    case "--social":
+      return Request(kind: .social, outputDirectory: directory)
+    default:
+      throw GeneratorError.usage
+    }
   }
 }
 
