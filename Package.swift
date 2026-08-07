@@ -4,7 +4,6 @@ import PackageDescription
 
 let package = Package(
   name: "Poof",
-  defaultLocalization: "en",
   platforms: [
     .iOS(.v26),
     .macOS(.v26),
@@ -18,11 +17,7 @@ let package = Package(
   ],
   targets: [
     .target(name: "Poof"),
-    .executableTarget(
-      name: "PoofDemo",
-      dependencies: ["Poof"],
-      resources: [.process("Resources")]
-    ),
+    .executableTarget(name: "PoofDemo", dependencies: ["Poof"]),
     .testTarget(name: "PoofDemoTests", dependencies: ["PoofDemo"]),
     .testTarget(name: "PoofTests", dependencies: ["Poof"]),
   ],

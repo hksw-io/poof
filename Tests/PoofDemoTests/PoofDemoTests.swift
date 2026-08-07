@@ -99,36 +99,6 @@
       #expect(DemoAppearance.dark.colorScheme == .dark)
     }
 
-    @Test("Every demo string reaches the bundle")
-    func demoStringsReachTheBundle() throws {
-      // The String Catalog is not compiled for this target: a build produces
-      // a resource bundle holding nothing but Info.plist, so every lookup
-      // fell through to the key. The generated strings file is what actually
-      // ships, and it has to stay in step with the catalog.
-      let bundle = Bundle.module
-      let url = try #require(
-        bundle.url(
-          forResource: "Localizable",
-          withExtension: "strings",
-          subdirectory: nil,
-          localization: "en"
-        )
-      )
-      let strings = try #require(
-        NSDictionary(contentsOf: url) as? [String: String]
-      )
-
-      #expect(strings.count == 38)
-
-      for key in [
-        "Reduce Motion", "Increased Contrast", "Classic", "Elapsed", "Poof",
-        "Options", "Accessibility", "On", "Off",
-        "Click anywhere in a preview to poof",
-      ] {
-        #expect(strings[key] != nil, "missing \(key)")
-      }
-    }
-
     @Test("The playback clock clamps to the playback window")
     func playbackClock() {
       let start = Date(timeIntervalSinceReferenceDate: 100)

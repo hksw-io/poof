@@ -26,21 +26,11 @@
     @FocusedValue(\.demoModel) private var model
 
     var body: some Commands {
-      CommandMenu(
-        Text(
-          "Poof",
-          bundle: #bundle,
-          comment: "Title of the demo's menu-bar menu."
-        )
-      ) {
+      CommandMenu(Text("Poof")) {
         Button {
           model?.poof()
         } label: {
-          Text(
-            "Poof",
-            bundle: #bundle,
-            comment: "Button that removes the demo items."
-          )
+          Text("Poof")
         }
         .keyboardShortcut(.return, modifiers: .command)
         .disabled(model?.canPoof != true)
@@ -48,11 +38,7 @@
         Button {
           model?.restore()
         } label: {
-          Text(
-            "Restore",
-            bundle: #bundle,
-            comment: "Button that restores the demo items."
-          )
+          Text("Restore")
         }
         .keyboardShortcut("r", modifiers: .command)
         .disabled(model?.canRestore != true)

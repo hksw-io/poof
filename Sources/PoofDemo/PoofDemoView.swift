@@ -11,20 +11,8 @@
       DemoGallery(model: model)
         .safeAreaPadding(20)
         .frame(minWidth: 560, minHeight: 380)
-        .navigationTitle(
-          Text(
-            "Poof",
-            bundle: #bundle,
-            comment: "The demo window's title."
-          )
-        )
-        .navigationSubtitle(
-          Text(
-            "Click anywhere in a preview to poof",
-            bundle: #bundle,
-            comment: "Instruction in the demo window's subtitle."
-          )
-        )
+        .navigationTitle(Text("Poof"))
+        .navigationSubtitle(Text("Click anywhere in a preview to poof"))
         .toolbar {
           ToolbarItem(placement: .primaryAction) {
             DemoPoofButton(model: model)
@@ -32,11 +20,7 @@
           ToolbarItem {
             Toggle(isOn: $isInspectorPresented) {
               Label {
-                Text(
-                  "Options",
-                  bundle: #bundle,
-                  comment: "Button that shows or hides the options panel."
-                )
+                Text("Options")
               } icon: {
                 Image(systemName: "sidebar.trailing")
               }
@@ -147,21 +131,13 @@
       } label: {
         if model.isItemVisible {
           Label {
-            Text(
-              "Poof",
-              bundle: #bundle,
-              comment: "Button that removes the demo items."
-            )
+            Text("Poof")
           } icon: {
             Image(systemName: "wind")
           }
         } else {
           Label {
-            Text(
-              "Restore",
-              bundle: #bundle,
-              comment: "Button that restores the demo items."
-            )
+            Text("Restore")
           } icon: {
             Image(systemName: "arrow.counterclockwise")
           }
@@ -318,11 +294,7 @@
                 .tag(mode)
             }
           } label: {
-            Text(
-              "Preview",
-              bundle: #bundle,
-              comment: "Label for choosing playback or a static poof pose."
-            )
+            Text("Preview")
           }
 
           Picker(selection: $model.surface) {
@@ -331,11 +303,7 @@
                 .tag(surface)
             }
           } label: {
-            Text(
-              "Surface",
-              bundle: #bundle,
-              comment: "Label for choosing the source shape to poof."
-            )
+            Text("Surface")
           }
         }
 
@@ -346,11 +314,7 @@
                 .tag(palette)
             }
           } label: {
-            Text(
-              "Palette",
-              bundle: #bundle,
-              comment: "Label for choosing poof fill colors."
-            )
+            Text("Palette")
           }
 
           Picker(selection: $model.appearance) {
@@ -359,11 +323,7 @@
                 .tag(appearance)
             }
           } label: {
-            Text(
-              "Appearance",
-              bundle: #bundle,
-              comment: "Label for the demo appearance picker."
-            )
+            Text("Appearance")
           }
           .pickerStyle(.segmented)
         }
@@ -376,11 +336,7 @@
               step: DemoPlaybackDuration.step
             )
           } label: {
-            Text(
-              "Duration",
-              bundle: #bundle,
-              comment: "Label for the poof playback duration slider."
-            )
+            Text("Duration")
             DemoDurationValue(duration: model.playbackDuration)
           }
 
@@ -395,11 +351,7 @@
         Section {
           AccessibilityStatus()
         } header: {
-          Text(
-            "Accessibility",
-            bundle: #bundle,
-            comment: "Heading above the accessibility status rows."
-          )
+          Text("Accessibility")
         }
       }
       .formStyle(.grouped)
@@ -471,11 +423,7 @@
           .monospacedDigit()
           .frame(width: Self.readoutWidth, alignment: .trailing)
         } label: {
-          Text(
-            "Elapsed",
-            bundle: #bundle,
-            comment: "Label before the playback timer readout."
-          )
+          Text("Elapsed")
         }
       }
     }
@@ -521,52 +469,38 @@
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     var body: some View {
-      // Bare literals here would resolve against Bundle.main, which for an SPM
-      // executable never holds these strings.
       AccessibilityStatusRow(
-        title: LocalizedStringResource("Reduce Motion", bundle: #bundle),
+        title: "Reduce Motion",
         isOn: reducesMotion
       )
       AccessibilityStatusRow(
-        title: LocalizedStringResource("Reduce Transparency", bundle: #bundle),
+        title: "Reduce Transparency",
         isOn: reducesTransparency
       )
       AccessibilityStatusRow(
-        title: LocalizedStringResource("Increased Contrast", bundle: #bundle),
+        title: "Increased Contrast",
         isOn: colorSchemeContrast == .increased
       )
 
       if reducesMotion {
-        Text(
-          "Reduce Motion replaces spatial poofs with a fade.",
-          bundle: #bundle,
-          comment: "Explanation shown when Reduce Motion is enabled."
-        )
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        Text("Reduce Motion replaces spatial poofs with a fade.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
       }
     }
   }
 
   private struct AccessibilityStatusRow: View {
-    let title: LocalizedStringResource
+    let title: String
     let isOn: Bool
 
     var body: some View {
       LabeledContent {
         Label {
           if isOn {
-            Text(
-              "On",
-              bundle: #bundle,
-              comment: "Status shown when an accessibility setting is enabled."
-            )
+            Text("On")
           } else {
-            Text(
-              "Off",
-              bundle: #bundle,
-              comment: "Status shown when an accessibility setting is disabled."
-            )
+            Text("Off")
           }
         } icon: {
           Image(
@@ -603,34 +537,25 @@
       }
     }
 
-    var title: LocalizedStringResource {
+    var title: String {
       switch self {
       case .classic:
-        LocalizedStringResource("Classic", bundle: #bundle)
+        "Classic"
       case .bloom:
-        LocalizedStringResource("Bloom", bundle: #bundle)
+        "Bloom"
       case .snap:
-        LocalizedStringResource("Snap", bundle: #bundle)
+        "Snap"
       }
     }
 
-    var summary: LocalizedStringResource {
+    var summary: String {
       switch self {
       case .classic:
-        LocalizedStringResource(
-          "The crisp five-pose original.",
-          bundle: #bundle
-        )
+        "The crisp five-pose original."
       case .bloom:
-        LocalizedStringResource(
-          "A soft, full cloud with a cartoony pop.",
-          bundle: #bundle
-        )
+        "A soft, full cloud with a cartoony pop."
       case .snap:
-        LocalizedStringResource(
-          "A tighter poof with a punchier break.",
-          bundle: #bundle
-        )
+        "A tighter poof with a punchier break."
       }
     }
   }
@@ -652,12 +577,12 @@
       }
     }
 
-    var title: LocalizedStringResource {
+    var title: String {
       switch self {
       case .automatic:
-        LocalizedStringResource("Grayscale", bundle: #bundle)
+        "Grayscale"
       case .pastel:
-        LocalizedStringResource("Pastel", bundle: #bundle)
+        "Pastel"
       }
     }
   }
@@ -687,16 +612,16 @@
       }
     }
 
-    var title: LocalizedStringResource {
+    var title: String {
       switch self {
       case .roundedSquare:
-        LocalizedStringResource("Rounded square", bundle: #bundle)
+        "Rounded square"
       case .circle:
-        LocalizedStringResource("Circle", bundle: #bundle)
+        "Circle"
       case .capsule:
-        LocalizedStringResource("Capsule", bundle: #bundle)
+        "Capsule"
       case .star:
-        LocalizedStringResource("Star", bundle: #bundle)
+        "Star"
       }
     }
   }
@@ -747,20 +672,20 @@
       }
     }
 
-    var title: LocalizedStringResource {
+    var title: String {
       switch self {
       case .animation:
-        LocalizedStringResource("Animation", bundle: #bundle)
+        "Animation"
       case .cloud:
-        LocalizedStringResource("Cloud", bundle: #bundle)
+        "Cloud"
       case .clusters:
-        LocalizedStringResource("Clusters", bundle: #bundle)
+        "Clusters"
       case .puffs:
-        LocalizedStringResource("Puffs", bundle: #bundle)
+        "Puffs"
       case .wisps:
-        LocalizedStringResource("Wisps", bundle: #bundle)
+        "Wisps"
       case .ringlets:
-        LocalizedStringResource("Ringlets", bundle: #bundle)
+        "Ringlets"
       }
     }
   }
@@ -785,14 +710,14 @@
       }
     }
 
-    var title: LocalizedStringResource {
+    var title: String {
       switch self {
       case .system:
-        LocalizedStringResource("System", bundle: #bundle)
+        "System"
       case .light:
-        LocalizedStringResource("Light", bundle: #bundle)
+        "Light"
       case .dark:
-        LocalizedStringResource("Dark", bundle: #bundle)
+        "Dark"
       }
     }
   }
