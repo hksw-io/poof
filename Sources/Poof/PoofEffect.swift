@@ -22,32 +22,12 @@ public struct PoofEffect: View {
   ///
   /// - Parameters:
   ///   - progress: Absolute normalized playback progress.
-  ///   - configuration: The poof's density, spread, overscan, and seed.
-  ///   - palette: Fill colors for the smoke.
-  public init(
-    progress: Double,
-    configuration: PoofConfiguration = .standard,
-    palette: PoofPalette = .automatic
-  ) {
-    self.progress = progress
-    style = .classic
-    self.configuration = configuration
-    self.palette = palette
-  }
-
-  /// Creates a styled poof at the supplied progress.
-  ///
-  /// Values at or below zero render no smoke. Values at or above one render
-  /// no smoke after the fifth pose.
-  ///
-  /// - Parameters:
-  ///   - progress: Absolute normalized playback progress.
   ///   - style: The visual character of the poof.
   ///   - configuration: The poof's density, spread, overscan, and seed.
   ///   - palette: Fill colors for the smoke.
   public init(
     progress: Double,
-    style: PoofStyle,
+    style: PoofStyle = .classic,
     configuration: PoofConfiguration = .standard,
     palette: PoofPalette = .automatic
   ) {

@@ -19,39 +19,7 @@ public struct PoofTransition: Sendable, Transition {
   private let configuration: PoofConfiguration
   private let palette: PoofPalette
 
-  /// Creates a classic poof with immediate content removal.
-  ///
-  /// - Parameters:
-  ///   - configuration: The poof's density, spread, overscan, and seed.
-  ///   - palette: Fill colors for the smoke.
-  public init(
-    configuration: PoofConfiguration = .standard,
-    palette: PoofPalette = .automatic
-  ) {
-    style = .classic
-    contentRemoval = .immediate
-    self.configuration = configuration
-    self.palette = palette
-  }
-
-  /// Creates a styled poof with immediate content removal.
-  ///
-  /// - Parameters:
-  ///   - style: The visual character of the poof.
-  ///   - configuration: The poof's density, spread, overscan, and seed.
-  ///   - palette: Fill colors for the smoke.
-  public init(
-    style: PoofStyle,
-    configuration: PoofConfiguration = .standard,
-    palette: PoofPalette = .automatic
-  ) {
-    self.style = style
-    contentRemoval = .immediate
-    self.configuration = configuration
-    self.palette = palette
-  }
-
-  /// Creates a styled poof transition with a content-removal behavior.
+  /// Creates a poof transition.
   ///
   /// - Parameters:
   ///   - style: The visual character of the poof.
@@ -60,7 +28,7 @@ public struct PoofTransition: Sendable, Transition {
   ///   - palette: Fill colors for the smoke.
   public init(
     style: PoofStyle = .classic,
-    contentRemoval: PoofContentRemoval,
+    contentRemoval: PoofContentRemoval = .immediate,
     configuration: PoofConfiguration = .standard,
     palette: PoofPalette = .automatic
   ) {
