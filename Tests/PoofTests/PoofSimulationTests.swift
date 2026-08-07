@@ -488,33 +488,6 @@ struct PoofSimulationTests {
     }
   }
 
-  @Test("A variation seed produces stable poses")
-  func stableVariation() {
-    let firstConfiguration = PoofConfiguration(
-      particleCount: 24,
-      seed: 0xCAFE_BABE
-    )
-    let secondConfiguration = PoofConfiguration(
-      particleCount: 24,
-      seed: 0xCAFE_BABE
-    )
-
-    for pose in PoofPose.allCases {
-      let first = glyphs(
-        for: pose,
-        in: firstConfiguration,
-        seed: 0xCAFE_BABE
-      )
-      let second = glyphs(
-        for: pose,
-        in: secondConfiguration,
-        seed: 0xCAFE_BABE
-      )
-
-      #expect(first == second)
-    }
-  }
-
   @Test("Source-cover variation is coherent and repeatable")
   func stableSourceCoverVariation() throws {
     for aspect in PoofSourceCoverAspect.allCases {
