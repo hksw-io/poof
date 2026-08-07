@@ -1,5 +1,4 @@
 #if os(macOS)
-  import Foundation
   import Poof
   import SwiftUI
 
@@ -54,15 +53,9 @@
     var previewMode = DemoPreviewMode.animation
     var surface = DemoSurface.roundedSquare
     var palette = DemoPalette.automatic
-    var playbackDuration = DemoPlaybackDuration.defaultValue
 
     private(set) var isItemVisible = true
     private(set) var playbackSeed: UInt64 = 0x504F_4F46
-    private(set) var playbackStart: Date? = nil
-    // Ticking is separate from the value the clock shows. The readout holds its
-    // final reading after a poof, but nothing should still be waking the
-    // display to redraw an unchanging number.
-    private(set) var isClockRunning = false
 
     var canPoof: Bool {
       previewMode.isPlayback && isItemVisible
@@ -81,24 +74,12 @@
     }
 
     func poof() {
-      guard
-        canPoof,
-        let animation = previewMode.playbackAnimation(
-          duration: playbackDuration
-        )
-      else {
+      guard canPoof else {
         return
       }
 
-      playbackStart = Date()
-      isClockRunning = true
-      // The completion is what stops the clock: it fires exactly when the poof
-      // finishes, so the readout freezes on its last reading instead of the
-      // schedule running on for the life of the app.
-      withAnimation(animation, completionCriteria: .removed) {
+      withAnimation(.poof) {
         isItemVisible = false
-      } completion: { [weak self] in
-        self?.isClockRunning = false
       }
     }
 
@@ -117,8 +98,6 @@
     /// changes mid-playback and the comparison has to start over.
     func reset() {
       isItemVisible = true
-      playbackStart = nil
-      isClockRunning = false
     }
   }
 
@@ -148,9 +127,7 @@
       .labelStyle(.titleAndIcon)
       .keyboardShortcut(.defaultAction)
       .disabled(!model.previewMode.isPlayback)
-      // The label rides the same state as the poof, so without this it
-      // cross-fades for the whole playback, which at the slowest setting is
-      // five seconds of a half-faded word.
+      // The label follows the same state as the poof, but should swap at once.
       .transaction { transaction in
         transaction.animation = nil
       }
@@ -329,136 +306,12 @@
         }
 
         Section {
-          LabeledContent {
-            Slider(
-              value: $model.playbackDuration,
-              in: DemoPlaybackDuration.range,
-              step: DemoPlaybackDuration.step
-            )
-          } label: {
-            Text("Duration")
-            DemoDurationValue(duration: model.playbackDuration)
-          }
-
-          DemoPlaybackClock(
-            start: model.playbackStart,
-            duration: model.playbackDuration,
-            isRunning: model.isClockRunning
-          )
-        }
-        .disabled(!model.previewMode.isPlayback)
-
-        Section {
           AccessibilityStatus()
         } header: {
           Text("Accessibility")
         }
       }
       .formStyle(.grouped)
-    }
-  }
-
-  private struct DemoDurationValue: View {
-    let duration: Double
-
-    var body: some View {
-      Text(
-        Measurement(value: duration, unit: UnitDuration.seconds),
-        format: .measurement(
-          width: .abbreviated,
-          usage: .asProvided,
-          numberFormatStyle: .number.precision(.fractionLength(2))
-        )
-      )
-      .monospacedDigit()
-      .foregroundStyle(.secondary)
-    }
-  }
-
-  /// A running readout of the playback, for pointing at a moment.
-  ///
-  /// Elapsed seconds and normalized progress tick while the poof plays and hold
-  /// at the end, so "at 2.2 s, 44%" stays on screen to be quoted against a
-  /// recording or a report.
-  private struct DemoPlaybackClock: View {
-    /// Wide enough for the longest reading the clock can show, so the value
-    /// never resizes anything around it. A readout that grows by a digit
-    /// invalidates the whole form, and the duration slider makes that
-    /// re-layout expensive.
-    private static let readoutWidth = 108.0
-
-    let start: Date?
-    let duration: Double
-    let isRunning: Bool
-
-    var body: some View {
-      // Paused on the playback rather than on the value: the reading stays on
-      // screen after a poof, but an idle app must not keep waking the display
-      // to redraw a number that cannot change. The schedule ticks at the
-      // display's rate, so a minimum interval would not slow it down.
-      TimelineView(.animation(paused: !isRunning)) { context in
-        let elapsed = DemoPlaybackClockModel.elapsed(
-          since: start,
-          at: context.date,
-          duration: duration
-        )
-        let progress = DemoPlaybackClockModel.progress(
-          elapsed: elapsed,
-          duration: duration
-        )
-
-        LabeledContent {
-          HStack(spacing: 6) {
-            Text(
-              Measurement(value: elapsed, unit: UnitDuration.seconds),
-              format: .measurement(
-                width: .abbreviated,
-                usage: .asProvided,
-                numberFormatStyle: .number.precision(.fractionLength(2))
-              )
-            )
-            Text(progress, format: .percent.precision(.fractionLength(0)))
-              .foregroundStyle(.secondary)
-          }
-          .monospacedDigit()
-          .frame(width: Self.readoutWidth, alignment: .trailing)
-        } label: {
-          Text("Elapsed")
-        }
-      }
-    }
-  }
-
-  /// The clock's arithmetic, kept apart from the view so it can be tested.
-  enum DemoPlaybackClockModel {
-    /// Elapsed playback time, clamped to the playback window.
-    ///
-    /// Clamping to the duration is what freezes the readout at the end
-    /// instead of counting into the silence after the poof.
-    static func elapsed(
-      since start: Date?,
-      at date: Date,
-      duration: Double
-    ) -> Double {
-      guard let start else {
-        return 0
-      }
-
-      return min(
-        max(date.timeIntervalSince(start), 0),
-        max(duration, 0)
-      )
-    }
-
-    static func progress(
-      elapsed: Double,
-      duration: Double
-    ) -> Double {
-      guard duration > 0 else {
-        return 0
-      }
-
-      return min(max(elapsed / duration, 0), 1)
     }
   }
 
@@ -587,12 +440,6 @@
     }
   }
 
-  enum DemoPlaybackDuration {
-    static let defaultValue = 1.0 / 3.0
-    static let range = defaultValue...5.0
-    static let step = 1.0 / 6.0
-  }
-
   enum DemoSurface: CaseIterable, Hashable, Identifiable {
     case roundedSquare
     case circle
@@ -640,19 +487,6 @@
 
     var isPlayback: Bool {
       self == .animation
-    }
-
-    func playbackAnimation(duration: Double) -> Animation? {
-      switch self {
-      case .animation:
-        .linear(
-          duration: min(
-            max(duration, DemoPlaybackDuration.range.lowerBound),
-            DemoPlaybackDuration.range.upperBound)
-        )
-      case .cloud, .clusters, .puffs, .wisps, .ringlets:
-        nil
-      }
     }
 
     var progress: Double? {

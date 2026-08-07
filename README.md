@@ -165,14 +165,8 @@ RoundedRectangle(cornerRadius: 16)
 `PoofPalette.automatic` and `.monochrome` both use the default grayscale fills.
 Color is always opt-in through `.pastel` or `PoofPalette(colors:)`.
 
-Bare `.poof` keeps the original one-third-second timing. Use
-`Animation.poof(duration:)` when a slower playback suits the interaction:
-
-```swift
-withAnimation(.poof(duration: 1)) {
-  isVisible = false
-}
-```
+Every poof uses the original one-third-second timing: five hard-swapped poses
+at fifteen frames per second.
 
 ### Options at a glance
 
@@ -359,9 +353,8 @@ Run the macOS demo:
 make run
 ```
 
-The demo applies surface, palette, and appearance settings to every style at
-once. Its duration slider ranges from the production one-third-second timing to
-five seconds for close inspection.
+The demo applies surface, palette, appearance, and preview settings to every
+style at once.
 
 Run formatting checks, the debug and release package tests, and the media
 generator tests:

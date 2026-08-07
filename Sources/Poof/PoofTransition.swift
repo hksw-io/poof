@@ -147,15 +147,16 @@ extension Animation {
     .linear(duration: PoofSimulation.duration)
   }
 
-  /// The poof timing curve over an explicit duration.
+  /// Returns the fixed poof timing curve.
   ///
-  /// The duration is clamped to `0.15...1.5` seconds.
-  public static func poof(duration: Double) -> Animation {
-    .linear(
-      duration: duration.isFinite
-        ? min(max(duration, 0.15), 1.5)
-        : PoofSimulation.duration
-    )
+  /// Poof playback is always one third of a second. Use ``poof`` instead.
+  @available(
+    *,
+    deprecated,
+    message: "Poof playback is fixed at one third of a second; use .poof."
+  )
+  public static func poof(duration _: Double) -> Animation {
+    .poof
   }
 }
 

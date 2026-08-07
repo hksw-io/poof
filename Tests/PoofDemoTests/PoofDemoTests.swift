@@ -1,5 +1,4 @@
 #if os(macOS)
-  import Foundation
   import Testing
 
   @testable import PoofDemo
@@ -40,28 +39,11 @@
       )
     }
 
-    @Test("Playback duration spans the production and inspection timings")
-    func playbackDuration() {
-      let poseCount = DemoPreviewMode.allCases.compactMap(\.progress).count
-
-      #expect(poseCount == 5)
-      #expect(DemoPlaybackDuration.defaultValue == 1.0 / 3.0)
-      #expect(DemoPlaybackDuration.range.lowerBound == 1.0 / 3.0)
-      #expect(DemoPlaybackDuration.range.upperBound == 5)
-      #expect(DemoPlaybackDuration.step == 1.0 / 6.0)
-      #expect(
-        DemoPreviewMode.animation.playbackAnimation(
-          duration: DemoPlaybackDuration.defaultValue
-        ) != nil
-      )
-    }
-
     @Test("Static poses remain separate from playback modes")
     func staticPoses() {
       #expect(DemoPreviewMode.animation.isPlayback)
-      #expect(
-        DemoPreviewMode.cloud.playbackAnimation(duration: 1) == nil
-      )
+      #expect(DemoPreviewMode.animation.progress == nil)
+      #expect(DemoPreviewMode.allCases.compactMap(\.progress).count == 5)
       #expect(!DemoPreviewMode.cloud.isPlayback)
       #expect(!DemoPreviewMode.clusters.isPlayback)
       #expect(!DemoPreviewMode.puffs.isPlayback)
@@ -99,79 +81,6 @@
       #expect(DemoAppearance.dark.colorScheme == .dark)
     }
 
-    @Test("The playback clock clamps to the playback window")
-    func playbackClock() {
-      let start = Date(timeIntervalSinceReferenceDate: 100)
-
-      // No playback yet reads as zero.
-      #expect(
-        DemoPlaybackClockModel.elapsed(
-          since: nil,
-          at: start,
-          duration: 5
-        ) == 0
-      )
-      // A skewed clock cannot count backward.
-      #expect(
-        DemoPlaybackClockModel.elapsed(
-          since: start,
-          at: start.addingTimeInterval(-1),
-          duration: 5
-        ) == 0
-      )
-      // Mid-playback is the plain interval.
-      #expect(
-        abs(
-          DemoPlaybackClockModel.elapsed(
-            since: start,
-            at: start.addingTimeInterval(2.2),
-            duration: 5
-          ) - 2.2
-        ) < 1e-9
-      )
-      // The readout freezes at the end instead of counting into the
-      // silence after the poof.
-      #expect(
-        DemoPlaybackClockModel.elapsed(
-          since: start,
-          at: start.addingTimeInterval(9),
-          duration: 5
-        ) == 5
-      )
-
-      // The frozen reading is a property of the arithmetic, not of the clock
-      // still ticking: long after the poof ends, the same values come back.
-      // That is what lets the schedule pause when playback finishes.
-      for multiple in [2.0, 20.0] {
-        #expect(
-          DemoPlaybackClockModel.elapsed(
-            since: start,
-            at: start.addingTimeInterval(5 * multiple),
-            duration: 5
-          ) == 5
-        )
-      }
-      #expect(
-        DemoPlaybackClockModel.progress(
-          elapsed: DemoPlaybackClockModel.elapsed(
-            since: start,
-            at: start.addingTimeInterval(100),
-            duration: 5
-          ),
-          duration: 5
-        ) == 1
-      )
-
-      #expect(DemoPlaybackClockModel.progress(elapsed: 0, duration: 5) == 0)
-      #expect(
-        abs(
-          DemoPlaybackClockModel.progress(elapsed: 2.2, duration: 5) - 0.44
-        ) < 1e-9
-      )
-      #expect(DemoPlaybackClockModel.progress(elapsed: 9, duration: 5) == 1)
-      #expect(DemoPlaybackClockModel.progress(elapsed: 1, duration: 0) == 0)
-    }
-
     @MainActor
     @Test("The demo model gates poof and restore on what is on screen")
     func demoModelCommands() {
@@ -194,13 +103,11 @@
       #expect(model.playbackSeed == seed)
       #expect(model.isItemVisible)
 
-      // Resetting clears the clock without advancing the seed, which is what
-      // a settings change needs.
+      // Resetting does not advance the seed, which is what a settings change
+      // needs.
       model.previewMode = .animation
       model.reset()
       #expect(model.playbackSeed == seed)
-      #expect(model.playbackStart == nil)
-      #expect(!model.isClockRunning)
     }
   }
 
