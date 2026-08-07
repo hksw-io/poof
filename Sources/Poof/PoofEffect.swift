@@ -333,32 +333,6 @@ struct PoofCanvas: View {
   @AnimatableIgnored var sourceSize: CGSize? = nil
 
   var body: some View {
-    PreparedPoofCanvas(
-      progress: progress,
-      palette: palette,
-      reducesMotion: reducesMotion,
-      reducesTransparency: reducesTransparency,
-      artScale: artScale,
-      frameSet: frameSet,
-      occludesSource: occludesSource,
-      referenceArtSide: referenceArtSide,
-      sourceSize: sourceSize
-    )
-  }
-}
-
-private struct PreparedPoofCanvas: View {
-  let progress: Double
-  let palette: PoofResolvedPalette
-  let reducesMotion: Bool
-  let reducesTransparency: Bool
-  let artScale: Double
-  let frameSet: PoofFrameSet?
-  let occludesSource: Bool
-  let referenceArtSide: Double?
-  let sourceSize: CGSize?
-
-  var body: some View {
     let pose = PoofSimulation.pose(for: progress)
     // Progressive playback hands the breakup poses on at the scale the cover
     // reached, resolved before Canvas drawing so its callback only turns
@@ -636,7 +610,6 @@ private struct PreparedPoofCanvas: View {
     .allowsHitTesting(false)
     .accessibilityHidden(true)
   }
-
 }
 
 enum PoofArtwork {
@@ -730,13 +703,12 @@ enum PoofArtwork {
     artSide: Double,
     frameSet: PoofFrameSet
   ) -> ProgressiveBreakupScale {
-    let coverGlyphs = sourceCoverGlyphLayers(
+    let coverGlyphs = sourceCoverGlyphs(
       for: .puffs,
       in: rect,
       artSide: artSide,
       frameSet: frameSet
     )
-    .map(\.glyph)
     let authoredGlyphs = frameSet.glyphs(for: .puffs)
 
     guard
@@ -808,8 +780,8 @@ enum PoofArtwork {
       .prefix(maximumRenderedElementCount)
       .enumerated()
       .map { index, glyph in
-        .single(
-          PoofGlyph(
+        PoofGlyphBlend(
+          glyph: PoofGlyph(
             x: glyph.x * scale.positionX,
             y: glyph.y * scale.positionY,
             width: glyph.width * scale.size,
@@ -820,6 +792,7 @@ enum PoofArtwork {
             rotation: glyph.rotation,
             tone: glyph.tone
           ),
+          scale: 1,
           paletteIndex: index
         )
       }
@@ -861,7 +834,11 @@ enum PoofArtwork {
       occludesSource: occludesSource,
       frameSet: frameSet
     ).enumerated().map {
-      .single($0.element, paletteIndex: $0.offset)
+      PoofGlyphBlend(
+        glyph: $0.element,
+        scale: 1,
+        paletteIndex: $0.offset
+      )
     }
   }
 
@@ -974,12 +951,12 @@ enum PoofArtwork {
     }
   }
 
-  private static func sourceCoverGlyphLayers(
+  private static func sourceCoverGlyphs(
     for pose: PoofPose,
     in rect: CGRect,
     artSide: Double,
     frameSet: PoofFrameSet
-  ) -> [PoofGlyphLayer] {
+  ) -> [PoofGlyph] {
     let aspect = PoofSourceCoverAspect(size: rect.size)
     let allGlyphs = frameSet.sourceCoverGlyphs(for: aspect)
     let visibleCount =
@@ -1036,17 +1013,14 @@ enum PoofArtwork {
           0.0
         }
 
-      return PoofGlyphLayer(
-        glyph: PoofGlyph(
-          x: (centers[index].x - rect.midX) / artSide,
-          y: (centers[index].y - rect.midY) / artSide,
-          width: rect.width * glyph.width * growth / artSide,
-          height: rect.height * glyph.height * growth / artSide,
-          contour: glyph.contour,
-          rotation: glyph.rotation,
-          tone: glyph.tone
-        ),
-        paletteIndex: glyph.paletteIndex
+      return PoofGlyph(
+        x: (centers[index].x - rect.midX) / artSide,
+        y: (centers[index].y - rect.midY) / artSide,
+        width: rect.width * glyph.width * growth / artSide,
+        height: rect.height * glyph.height * growth / artSide,
+        contour: glyph.contour,
+        rotation: glyph.rotation,
+        tone: glyph.tone
       )
     }
   }

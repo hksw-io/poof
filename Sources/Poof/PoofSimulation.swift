@@ -62,27 +62,10 @@ struct PoofGlyph: Equatable, Sendable {
   }
 }
 
-struct PoofGlyphLayer: Equatable, Sendable {
-  let glyph: PoofGlyph
-  let paletteIndex: Int
-}
-
 struct PoofGlyphBlend: Equatable, Sendable {
   let glyph: PoofGlyph
   let scale: Double
   let paletteIndex: Int
-
-  static func single(
-    _ glyph: PoofGlyph,
-    paletteIndex: Int,
-    scale: Double = 1
-  ) -> PoofGlyphBlend {
-    PoofGlyphBlend(
-      glyph: glyph,
-      scale: scale,
-      paletteIndex: paletteIndex
-    )
-  }
 }
 
 enum PoofSourceCoverAspect: CaseIterable, Hashable, Sendable {
