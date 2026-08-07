@@ -28,19 +28,6 @@ struct PoofSourceErosion: Equatable, Sendable {
   /// The visible region at each step, in the unit square.
   private let steps: [Path]
 
-  private init(steps: [Path]) {
-    self.steps = steps
-  }
-
-  /// The progress at which the source is wholly gone.
-  var engulfProgress: Double {
-    guard let index = steps.firstIndex(where: \.isEmpty) else {
-      return 1
-    }
-
-    return Double(index) / Double(steps.count)
-  }
-
   /// The visible region of `rect` at this progress.
   func path(for progress: Double, in rect: CGRect) -> Path {
     guard !progress.isNaN, progress > 0 else {
@@ -137,7 +124,7 @@ struct PoofSourceErosion: Equatable, Sendable {
   /// Going through `CGPath` here runs the solve once, on whichever thread
   /// builds the erosion — which is off the main one by construction. It also
   /// settles `isEmpty`, which reads `false` on a lazily emptied path and is
-  /// what ``engulfProgress`` and the retirement guard both ask.
+  /// what ``path(for:in:)`` asks.
   private static func settled(_ path: Path) -> Path {
     Path(path.cgPath)
   }

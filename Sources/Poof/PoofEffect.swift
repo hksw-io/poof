@@ -842,30 +842,6 @@ enum PoofArtwork {
     }
   }
 
-  static func sourceCoverPath(
-    for pose: PoofPose,
-    in rect: CGRect,
-    frameSet: PoofFrameSet
-  ) -> Path? {
-    let elements = sourceCoverElements(
-      for: pose,
-      in: rect,
-      frameSet: frameSet
-    )
-
-    guard elements.isEmpty == false else {
-      return nil
-    }
-
-    var path = Path()
-
-    for element in elements {
-      path.addPath(element.path)
-    }
-
-    return path
-  }
-
   static func sourceCoverElements(
     for pose: PoofPose,
     in rect: CGRect,

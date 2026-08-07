@@ -161,13 +161,6 @@ struct PoofRenderingTests {
           variationSeed: seed
         )
         let rect = CGRect(origin: .zero, size: size)
-        #expect(
-          PoofArtwork.sourceCoverPath(
-            for: .puffs,
-            in: rect,
-            frameSet: frameSet
-          ) != nil
-        )
         let elements = PoofArtwork.sourceCoverElements(
           for: .puffs,
           in: rect,
@@ -258,11 +251,11 @@ struct PoofRenderingTests {
 
         for pose in [PoofPose.wisps, .ringlets] {
           #expect(
-            PoofArtwork.sourceCoverPath(
+            PoofArtwork.sourceCoverElements(
               for: pose,
               in: rect,
               frameSet: frameSet
-            ) == nil
+            ).isEmpty
           )
         }
         let cloudElements = PoofArtwork.sourceCoverElements(
@@ -385,8 +378,8 @@ struct PoofRenderingTests {
         sourceCoverAspect: .square,
         variationSeed: seed
       )
-      let path = try #require(
-        PoofArtwork.sourceCoverPath(
+      let path = combinedPath(
+        for: PoofArtwork.sourceCoverElements(
           for: .puffs,
           in: rect,
           frameSet: frameSet

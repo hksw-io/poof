@@ -246,9 +246,8 @@ struct PoofTransitionTests {
       }
     }
 
-    // What the factory builds is settled, so a step that has eaten everything
-    // reports it — which is what `engulfProgress` and the retirement guard
-    // both read.
+    // What the factory builds is settled, so the dense pose reports that it
+    // has eaten everything.
     let size = CGSize(width: 84, height: 84)
     let frameSet = PoofSimulation.makeFrameSet(
       configuration: PoofConfiguration(seed: 7),
@@ -260,9 +259,7 @@ struct PoofTransitionTests {
       PoofSourceErosion.stepped(size: size, frameSet: frameSet)
     )
 
-    #expect(erosion.engulfProgress > 0)
-    #expect(erosion.engulfProgress <= 0.6)
-    #expect(erosion.path(for: erosion.engulfProgress, in: rect).isEmpty)
+    #expect(erosion.path(for: 0.5, in: rect).isEmpty)
   }
 
   @Test("Reduce Motion replaces spatial removal with a bounded fade")
