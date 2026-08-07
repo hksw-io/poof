@@ -167,8 +167,7 @@ private struct AdaptivePoofModifier: ViewModifier {
         configuration: configuration,
         palette: PoofResolvedPalette(
           contrast: colorSchemeContrast,
-          palette: palette,
-          style: style
+          palette: palette
         ),
         reducesMotion: reducesMotion,
         reducesTransparency: reducesTransparency,

@@ -2047,8 +2047,7 @@ struct PoofRenderingTests {
       progress: progress,
       palette: PoofResolvedPalette(
         contrast: contrast,
-        palette: palette,
-        style: style
+        palette: palette
       ),
       reducesMotion: reducesMotion,
       reducesTransparency: reducesTransparency,
@@ -2099,8 +2098,7 @@ struct PoofRenderingTests {
     let content = PoofCanvas(
       progress: progress,
       palette: PoofResolvedPalette(
-        contrast: .standard,
-        style: style
+        contrast: .standard
       ),
       reducesMotion: false,
       reducesTransparency: true,
@@ -2346,8 +2344,7 @@ private struct ProgressiveTransitionStrip: View {
               PoofCanvas(
                 progress: progress,
                 palette: PoofResolvedPalette(
-                  contrast: contrast,
-                  style: style
+                  contrast: contrast
                 ),
                 reducesMotion: false,
                 reducesTransparency: reducesTransparency,

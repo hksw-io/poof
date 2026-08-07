@@ -76,8 +76,6 @@ struct PoofConfigurationTests {
     #expect(PoofPalette.pastel != .monochrome)
     #expect(custom == PoofPalette(colors: [.red, .blue]))
     #expect(custom != PoofPalette(colors: [.blue, .red]))
-    #expect(PoofPalette.automatic.colors(for: .classic).isEmpty)
-    #expect(PoofPalette.automatic.colors(for: .bloom).isEmpty)
-    #expect(PoofPalette.automatic.colors(for: .snap).isEmpty)
+    #expect(PoofPalette.automatic.colors.isEmpty)
   }
 }

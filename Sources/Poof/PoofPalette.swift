@@ -21,16 +21,12 @@ public struct PoofPalette: Hashable, Sendable {
     ]
   )
 
-  private let colors: [Color]
+  let colors: [Color]
 
   /// Creates a palette from a repeating set of fill colors.
   ///
   /// Pass an empty array to use monochrome fills.
   public init(colors: [Color]) {
     self.colors = colors
-  }
-
-  func colors(for _: PoofStyle) -> [Color] {
-    colors
   }
 }

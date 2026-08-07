@@ -44,8 +44,7 @@ public struct PoofEffect: View {
       configuration: configuration,
       palette: PoofResolvedPalette(
         contrast: colorSchemeContrast,
-        palette: palette,
-        style: style
+        palette: palette
       ),
       reducesMotion: reducesMotion,
       reducesTransparency: reducesTransparency,
@@ -197,8 +196,7 @@ private struct PoofEmissionView: View {
       emission: emission,
       palette: PoofResolvedPalette(
         contrast: colorSchemeContrast,
-        palette: emission.palette,
-        style: emission.style
+        palette: emission.palette
       ),
       reducesMotion: reducesMotion,
       reducesTransparency: reducesTransparency
@@ -1346,8 +1344,7 @@ struct PoofResolvedPalette: Sendable {
 
   init(
     contrast: ColorSchemeContrast,
-    palette: PoofPalette = .automatic,
-    style: PoofStyle = .classic
+    palette: PoofPalette = .automatic
   ) {
     let hasIncreasedContrast = contrast == .increased
 
@@ -1370,7 +1367,7 @@ struct PoofResolvedPalette: Sendable {
       white: 0,
       opacity: hasIncreasedContrast ? 0.46 : 0.36
     )
-    colors = palette.colors(for: style)
+    colors = palette.colors
   }
 
   func fill(
