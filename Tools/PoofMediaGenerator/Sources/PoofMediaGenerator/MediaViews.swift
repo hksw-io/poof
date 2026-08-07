@@ -279,68 +279,10 @@ private struct PoofStage: View {
       .fill(palette.accent)
       .frame(width: sourceSide, height: sourceSide)
       .overlay {
-        PackageMark()
-          .stroke(
-            Color.white,
-            style: StrokeStyle(
-              lineWidth: max(sourceSide * 0.045, 1),
-              lineCap: .round,
-              lineJoin: .round
-            )
-          )
-          .frame(width: sourceSide * 0.48, height: sourceSide * 0.48)
+        Image(systemName: "shippingbox")
+          .font(.system(size: sourceSide * 0.42, weight: .semibold))
+          .foregroundStyle(.white)
       }
-  }
-}
-
-private struct PackageMark: Shape {
-  func path(in rect: CGRect) -> Path {
-    let drawingRect = rect.insetBy(
-      dx: rect.width * 0.06,
-      dy: rect.height * 0.06
-    )
-    let top = CGPoint(x: drawingRect.midX, y: drawingRect.minY)
-    let upperLeft = CGPoint(
-      x: drawingRect.minX,
-      y: drawingRect.minY + drawingRect.height * 0.24
-    )
-    let upperRight = CGPoint(
-      x: drawingRect.maxX,
-      y: drawingRect.minY + drawingRect.height * 0.24
-    )
-    let center = CGPoint(
-      x: drawingRect.midX,
-      y: drawingRect.minY + drawingRect.height * 0.48
-    )
-    let lowerLeft = CGPoint(
-      x: drawingRect.minX,
-      y: drawingRect.minY + drawingRect.height * 0.76
-    )
-    let lowerRight = CGPoint(
-      x: drawingRect.maxX,
-      y: drawingRect.minY + drawingRect.height * 0.76
-    )
-    let bottom = CGPoint(x: drawingRect.midX, y: drawingRect.maxY)
-
-    return Path { path in
-      path.move(to: top)
-      path.addLine(to: upperRight)
-      path.addLine(to: center)
-      path.addLine(to: upperLeft)
-      path.closeSubpath()
-
-      path.move(to: upperLeft)
-      path.addLine(to: lowerLeft)
-      path.addLine(to: bottom)
-      path.addLine(to: center)
-
-      path.move(to: upperRight)
-      path.addLine(to: lowerRight)
-      path.addLine(to: bottom)
-
-      path.move(to: center)
-      path.addLine(to: bottom)
-    }
   }
 }
 
