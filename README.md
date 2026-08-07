@@ -3,8 +3,9 @@
 [![CI](https://github.com/hksw-io/poof/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/hksw-io/poof/actions/workflows/ci.yml)
 
 Poof brings AppKit’s retired disappearing-item animation to SwiftUI on OS 26
-and later. It uses an original, clean-room `Canvas` renderer and does not call
-the deprecated `NSAnimationEffect` API or ship copied system assets.
+and later. Use it as a removal transition or trigger an independent poof at any
+local point. It uses an original, clean-room `Canvas` renderer and does not
+call the deprecated `NSAnimationEffect` API or ship copied system assets.
 
 <table>
   <tr>
@@ -117,9 +118,9 @@ struct ExampleView: View {
 ```
 
 This example uses progressive removal so the smoke covers the source as it
-disappears. Poof affects removal only, so restoring the view does not play the
-animation backward. The `.poof` animation supplies the intended linear,
-one-third-second timing.
+disappears. The transition affects removal only, so restoring the view does
+not play the animation backward. The `.poof` animation supplies the intended
+linear, one-third-second timing.
 
 ## Styles and gradual removal
 
@@ -231,6 +232,43 @@ Without a seed, Poof chooses one slight variation per playback and carries it
 through all five poses. Use a fixed seed for snapshots, previews, or
 synchronized effects. `fieldScale` adds transparent padding; it does not
 enlarge the artwork.
+
+## Poof at a point
+
+Use the trigger-driven modifier when something should poof without removing a
+view:
+
+```swift
+struct PoofPlayground: View {
+  @State private var location = CGPoint.zero
+  @State private var trigger = 0
+
+  var body: some View {
+    Image(systemName: "sparkles")
+      .frame(width: 320, height: 180)
+      .background(.fill.quaternary, in: .rect(cornerRadius: 16))
+      .contentShape(.rect)
+      .poof(
+        at: location,
+        style: .bloom,
+        palette: .pastel,
+        trigger: trigger
+      )
+      .onTapGesture(coordinateSpace: .local) { point in
+        location = point
+        trigger += 1
+      }
+  }
+}
+```
+
+The initial trigger value is quiet. Every later change starts a separate
+one-third-second poof centered at `location`, in the modified view's local
+coordinate space, so rapid changes can overlap. The source view stays visible
+and unchanged; it keeps hit testing and accessibility. Reduce Motion suppresses
+the smoke, and an ancestor that clips its content may also clip the poof's
+transparent overscan. The default artwork size is 84 points; `size:` is clamped
+to 42...160 points.
 
 ## Manual control
 

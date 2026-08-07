@@ -109,8 +109,8 @@
     "The crisp five-pose original.": {
       "comment": "Short description of the Classic poof style."
     },
-    "Three ways to poof": {
-      "comment": "The demo window's subtitle."
+    "Click anywhere in a preview to poof": {
+      "comment": "Instruction in the demo window's subtitle."
     },
     "Wisps": {
       "comment": "Preview option for the sparse wisps pose."

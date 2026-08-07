@@ -20,9 +20,9 @@
         )
         .navigationSubtitle(
           Text(
-            "Three ways to poof",
+            "Click anywhere in a preview to poof",
             bundle: #bundle,
-            comment: "The demo window's subtitle."
+            comment: "Instruction in the demo window's subtitle."
           )
         )
         .toolbar {
@@ -204,6 +204,9 @@
   }
 
   private struct DemoStylePreview: View {
+    @State private var poofLocation = CGPoint.zero
+    @State private var poofTrigger: UInt64 = 0
+
     let style: DemoPoofStyle
     let model: DemoModel
 
@@ -236,6 +239,18 @@
           }
           .frame(maxWidth: .infinity, minHeight: 132)
           .background(.fill.quaternary, in: .rect(cornerRadius: 10))
+          .contentShape(.rect)
+          .poof(
+            at: poofLocation,
+            style: style.poofStyle,
+            configuration: PoofConfiguration(seed: model.playbackSeed),
+            palette: model.palette.poofPalette,
+            trigger: poofTrigger
+          )
+          .onTapGesture(coordinateSpace: .local) { location in
+            poofLocation = location
+            poofTrigger &+= 1
+          }
 
           Text(style.summary)
             .font(.caption)

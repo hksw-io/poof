@@ -123,6 +123,7 @@
       for key in [
         "Reduce Motion", "Increased Contrast", "Classic", "Elapsed", "Poof",
         "Options", "Accessibility", "On", "Off",
+        "Click anywhere in a preview to poof",
       ] {
         #expect(strings[key] != nil, "missing \(key)")
       }

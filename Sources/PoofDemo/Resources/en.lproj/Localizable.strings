@@ -110,8 +110,8 @@
 /* Short description of the Classic poof style. */
 "The crisp five-pose original." = "The crisp five-pose original.";
 
-/* The demo window's subtitle. */
-"Three ways to poof" = "Three ways to poof";
+/* Instruction in the demo window's subtitle. */
+"Click anywhere in a preview to poof" = "Click anywhere in a preview to poof";
 
 /* Preview option for the sparse wisps pose. */
 "Wisps" = "Wisps";

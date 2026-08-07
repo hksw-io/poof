@@ -75,6 +75,194 @@ public struct PoofEffect: View {
   }
 }
 
+extension View {
+  /// Plays a poof centered at a point whenever `trigger` changes.
+  ///
+  /// The point is expressed in this view's local coordinate space. The source
+  /// view remains visible and interactive while each poof plays independently.
+  ///
+  /// - Parameters:
+  ///   - location: The center of the poof in local coordinates.
+  ///   - size: The artwork's reference side, clamped to `42...160` points.
+  ///   - style: The visual character of the poof.
+  ///   - configuration: The poof's density, spread, overscan, and seed.
+  ///   - palette: Fill colors for the smoke.
+  ///   - trigger: A value whose changes start new poofs. The initial value does
+  ///     not start one.
+  public func poof(
+    at location: CGPoint,
+    size: CGFloat = 84,
+    style: PoofStyle = .classic,
+    configuration: PoofConfiguration = .standard,
+    palette: PoofPalette = .automatic,
+    trigger: some Equatable
+  ) -> some View {
+    modifier(
+      PoofEmitterModifier(
+        location: location,
+        size: size,
+        style: style,
+        configuration: configuration,
+        palette: palette,
+        trigger: trigger
+      )
+    )
+  }
+}
+
+struct PoofEmission: Identifiable, Sendable {
+  let id: UUID
+  let location: CGPoint
+  let size: CGFloat
+  let style: PoofStyle
+  let configuration: PoofConfiguration
+  let palette: PoofPalette
+  let frameSet: PoofFrameSet
+
+  @MainActor
+  init?(
+    location: CGPoint,
+    size: CGFloat,
+    style: PoofStyle,
+    configuration: PoofConfiguration,
+    palette: PoofPalette,
+    id: UUID = UUID()
+  ) {
+    guard location.x.isFinite, location.y.isFinite else {
+      return nil
+    }
+
+    let size = size.isFinite ? size : 84
+
+    self.id = id
+    self.location = location
+    self.size = PoofLayout.artSide(
+      for: CGSize(width: size, height: size)
+    )
+    self.style = style
+    self.configuration = configuration
+    self.palette = palette
+    frameSet = PoofPlayback.makeFrameSet(
+      for: configuration,
+      style: style,
+      coversSource: false
+    )
+  }
+}
+
+private struct PoofEmitterModifier<Trigger: Equatable>: ViewModifier {
+  @State private var emissions: [PoofEmission] = []
+
+  let location: CGPoint
+  let size: CGFloat
+  let style: PoofStyle
+  let configuration: PoofConfiguration
+  let palette: PoofPalette
+  let trigger: Trigger
+
+  func body(content: Content) -> some View {
+    content
+      .overlay {
+        GeometryReader { _ in
+          ForEach(emissions) { emission in
+            PoofEmissionView(emission: emission) {
+              var transaction = Transaction(animation: nil)
+              transaction.disablesAnimations = true
+
+              withTransaction(transaction) {
+                emissions.removeAll { $0.id == emission.id }
+              }
+            }
+          }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+      }
+      .onChange(of: trigger) { _, _ in
+        guard
+          let emission = PoofEmission(
+            location: location,
+            size: size,
+            style: style,
+            configuration: configuration,
+            palette: palette
+          )
+        else {
+          return
+        }
+
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+
+        withTransaction(transaction) {
+          emissions.append(emission)
+        }
+      }
+  }
+}
+
+private struct PoofEmissionView: View {
+  @Environment(\.accessibilityReduceMotion) private var reducesMotion
+  @Environment(\.accessibilityReduceTransparency)
+  private var reducesTransparency
+  @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+  @State private var progress = 0.0
+
+  let emission: PoofEmission
+  let completion: @MainActor () -> Void
+
+  var body: some View {
+    PoofEmissionArtwork(
+      progress: progress,
+      emission: emission,
+      palette: PoofResolvedPalette(
+        contrast: colorSchemeContrast,
+        palette: emission.palette,
+        style: emission.style
+      ),
+      reducesMotion: reducesMotion,
+      reducesTransparency: reducesTransparency
+    )
+    .onAppear {
+      withAnimation(.poof, completionCriteria: .removed) {
+        progress = 1
+      } completion: {
+        completion()
+      }
+    }
+  }
+}
+
+@Animatable
+private struct PoofEmissionArtwork: View {
+  var progress: Double
+
+  @AnimatableIgnored var emission: PoofEmission
+  @AnimatableIgnored var palette: PoofResolvedPalette
+  @AnimatableIgnored var reducesMotion: Bool
+  @AnimatableIgnored var reducesTransparency: Bool
+
+  var body: some View {
+    let canvasSize = PoofLayout.canvasSize(
+      for: CGSize(width: emission.size, height: emission.size),
+      fieldScale: emission.configuration.fieldScale,
+      coversSource: false
+    )
+
+    PoofCanvas(
+      progress: PoofSimulation.drawnProgress(for: progress),
+      palette: palette,
+      reducesMotion: reducesMotion,
+      reducesTransparency: reducesTransparency,
+      artScale: emission.configuration.fieldScale,
+      frameSet: emission.frameSet,
+      occludesSource: false
+    )
+    .frame(width: canvasSize.width, height: canvasSize.height)
+    .position(emission.location)
+  }
+}
+
 struct PoofPlayback: View {
   @State private var frameSet: PoofFrameSet? = nil
 
