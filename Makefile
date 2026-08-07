@@ -1,4 +1,4 @@
-.PHONY: build check format lint media release-test run social test
+.PHONY: build check format lint media release-test run test
 
 SWIFT_PATHS = Package.swift Sources Tests \
 	Tools/PoofMediaGenerator/Package.swift \
@@ -32,12 +32,6 @@ check:
 media:
 	swift run --package-path Tools/PoofMediaGenerator -c release \
 		PoofMediaGenerator --output Documentation/Media
-
-# Clips cut for a feed rather than for the README. Not committed: they are
-# large, nothing pixel-compares them, and they are regenerated on demand.
-social:
-	swift run --package-path Tools/PoofMediaGenerator -c release \
-		PoofMediaGenerator --social Documentation/Social
 
 run:
 	swift run PoofDemo
