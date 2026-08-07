@@ -2545,44 +2545,6 @@ private struct PixelSnapshot {
     }
   }
 
-  var sourceBlueConnectedComponentCount: Int {
-    connectedComponentCount(minimumArea: 4) {
-      isSourceBluePixel(at: $0)
-    }
-  }
-
-  /// Source pixels that vanished between two frames, split into those covered
-  /// by ink and those left bare — a bare removal is a sliver popping rather
-  /// than smoke consuming.
-  func bareSourceRemovalCount(
-    over previous: PixelSnapshot,
-    alphaFloor: UInt8 = 32
-  ) -> (removed: Int, bare: Int) {
-    guard pixels.count == previous.pixels.count else {
-      return (.max, .max)
-    }
-
-    var removed = 0
-    var bare = 0
-
-    for offset in stride(from: 0, to: pixels.count, by: 4) {
-      guard
-        previous.isSourceBluePixel(at: offset),
-        !isSourceBluePixel(at: offset)
-      else {
-        continue
-      }
-
-      removed += 1
-
-      if pixels[offset + 3] < alphaFloor {
-        bare += 1
-      }
-    }
-
-    return (removed: removed, bare: bare)
-  }
-
   func alphaExcessPixelCount(
     over previous: PixelSnapshot,
     tolerance: UInt8 = 4
