@@ -148,16 +148,18 @@ struct PoofRenderingTests {
   @Test("Progressive smoke carries coverage forward and engulfs the source")
   func progressiveCoverageEngulfsSource() throws {
     for seed in 0..<UInt64(PoofSimulation.sourceCoverGeometryProfileCount) {
-      let frameSet = PoofSimulation.makeFrameSet(
-        configuration: PoofConfiguration(seed: seed),
-        variationSeed: seed
-      )
-
       for size in [
         CGSize(width: 84, height: 84),
         CGSize(width: 132, height: 48),
         CGSize(width: 48, height: 132),
       ] {
+        let aspect = PoofSourceCoverAspect(size: size)
+        let frameSet = PoofSimulation.makeFrameSet(
+          configuration: PoofConfiguration(seed: seed),
+          coversSource: true,
+          sourceCoverAspect: aspect,
+          variationSeed: seed
+        )
         let rect = CGRect(origin: .zero, size: size)
         #expect(
           PoofArtwork.sourceCoverPath(
@@ -171,14 +173,6 @@ struct PoofRenderingTests {
           in: rect,
           frameSet: frameSet
         )
-        let aspect =
-          if size.width > size.height * 1.4 {
-            PoofSourceCoverAspect.wide
-          } else if size.height > size.width * 1.4 {
-            PoofSourceCoverAspect.tall
-          } else {
-            PoofSourceCoverAspect.square
-          }
         let descriptors = frameSet.sourceCoverGlyphs(for: aspect)
         let adjustmentTolerance =
           PoofLayout.artSide(for: size) * 1e-6
@@ -316,16 +310,18 @@ struct PoofRenderingTests {
   @Test("Painted dense-pose paths cover the source without a catchall")
   func sourceCoverPathsCoverSource() throws {
     for seed in 0..<UInt64(PoofSimulation.sourceCoverGeometryProfileCount) {
-      let frameSet = PoofSimulation.makeFrameSet(
-        configuration: PoofConfiguration(seed: seed),
-        variationSeed: seed
-      )
-
       for size in [
         CGSize(width: 84, height: 84),
         CGSize(width: 132, height: 48),
         CGSize(width: 48, height: 132),
       ] {
+        let aspect = PoofSourceCoverAspect(size: size)
+        let frameSet = PoofSimulation.makeFrameSet(
+          configuration: PoofConfiguration(seed: seed),
+          coversSource: true,
+          sourceCoverAspect: aspect,
+          variationSeed: seed
+        )
         let rect = CGRect(origin: .zero, size: size)
         let elements = PoofArtwork.sourceCoverElements(
           for: .puffs,
@@ -385,6 +381,8 @@ struct PoofRenderingTests {
     for seed in 0..<UInt64(PoofSimulation.sourceCoverGeometryProfileCount) {
       let frameSet = PoofSimulation.makeFrameSet(
         configuration: PoofConfiguration(seed: seed),
+        coversSource: true,
+        sourceCoverAspect: .square,
         variationSeed: seed
       )
       let path = try #require(
@@ -461,12 +459,13 @@ struct PoofRenderingTests {
       ]
 
     for seed in 0..<UInt64(PoofSimulation.sourceCoverGeometryProfileCount) {
-      let frameSet = PoofSimulation.makeFrameSet(
-        configuration: PoofConfiguration(seed: seed),
-        variationSeed: seed
-      )
-
       for item in cases {
+        let frameSet = PoofSimulation.makeFrameSet(
+          configuration: PoofConfiguration(seed: seed),
+          coversSource: true,
+          sourceCoverAspect: item.aspect,
+          variationSeed: seed
+        )
         let rect = CGRect(origin: .zero, size: item.size)
 
         #expect(
@@ -576,12 +575,13 @@ struct PoofRenderingTests {
       ]
 
     for seed in 0..<UInt64(PoofSimulation.sourceCoverGeometryProfileCount) {
-      let frameSet = PoofSimulation.makeFrameSet(
-        configuration: PoofConfiguration(seed: seed),
-        variationSeed: seed
-      )
-
       for item in cases {
+        let frameSet = PoofSimulation.makeFrameSet(
+          configuration: PoofConfiguration(seed: seed),
+          coversSource: true,
+          sourceCoverAspect: item.aspect,
+          variationSeed: seed
+        )
         let rect = CGRect(origin: .zero, size: item.size)
         let descriptors = frameSet.sourceCoverGlyphs(for: item.aspect)
         let clusters = PoofArtwork.sourceCoverElements(
@@ -903,6 +903,8 @@ struct PoofRenderingTests {
     let waiting = waitingFrames[1]
     let frameSet = PoofSimulation.makeFrameSet(
       configuration: PoofConfiguration(seed: 0x504F_4F46),
+      coversSource: true,
+      sourceCoverAspect: .square,
       variationSeed: 0x504F_4F46
     )
     let erosion = PoofSourceErosion.stepped(
@@ -994,6 +996,8 @@ struct PoofRenderingTests {
           frameSet: PoofSimulation.makeFrameSet(
             configuration: PoofConfiguration(seed: seed),
             style: style,
+            coversSource: true,
+            sourceCoverAspect: .square,
             variationSeed: seed
           )
         )
@@ -1109,6 +1113,8 @@ struct PoofRenderingTests {
     let sourceSide = 84.0
     let frameSet = PoofSimulation.makeFrameSet(
       configuration: PoofConfiguration(seed: 0x504F_4F46),
+      coversSource: true,
+      sourceCoverAspect: .square,
       variationSeed: 0x504F_4F46
     )
 
@@ -1446,8 +1452,14 @@ struct PoofRenderingTests {
       coveredFrameSet.sourceCoverGlyphs(for: .wide).count
         == PoofSourceCoverLayout.glyphCount
     )
-    #expect(coveredFrameSet.storedSourceCoverGlyphs(for: .square).isEmpty)
-    #expect(coveredFrameSet.storedSourceCoverGlyphs(for: .tall).isEmpty)
+    #expect(
+      coveredFrameSet.sourceCoverGlyphs(for: .square)
+        == coveredFrameSet.sourceCoverGlyphs(for: .wide)
+    )
+    #expect(
+      coveredFrameSet.sourceCoverGlyphs(for: .tall)
+        == coveredFrameSet.sourceCoverGlyphs(for: .wide)
+    )
   }
 
   @Test("Reduce Motion removes spatial drawing")
@@ -2087,6 +2099,8 @@ struct PoofRenderingTests {
     let frameSet = PoofSimulation.makeFrameSet(
       configuration: configuration,
       style: style,
+      coversSource: true,
+      sourceCoverAspect: PoofSourceCoverAspect(size: sourceSize),
       variationSeed: variationSeed
     )
     let content = PoofCanvas(
@@ -2247,6 +2261,10 @@ private struct ContentRemovalStrip: View {
       PoofSimulation.makeFrameSet(
         configuration: configuration,
         style: style,
+        coversSource: true,
+        sourceCoverAspect: PoofSourceCoverAspect(
+          size: CGSize(width: width, height: height)
+        ),
         variationSeed: seed
       )
     }
@@ -2298,6 +2316,10 @@ private struct ProgressiveTransitionStrip: View {
     let frameSet = PoofSimulation.makeFrameSet(
       configuration: configuration,
       style: style,
+      coversSource: true,
+      sourceCoverAspect: PoofSourceCoverAspect(
+        size: CGSize(width: width, height: height)
+      ),
       variationSeed: variationSeed
     )
 

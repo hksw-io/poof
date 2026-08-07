@@ -126,7 +126,7 @@ struct PoofSourceCoverGlyph: Equatable, Sendable {
   let lineageParentIndex: Int?
 }
 
-struct PoofSourceCoverLayout: Equatable, Sendable {
+enum PoofSourceCoverLayout {
   static let glyphCount = 64
   static let rootGlyphCount = 12
   static let repairGlyphCount = 10
@@ -139,30 +139,6 @@ struct PoofSourceCoverLayout: Equatable, Sendable {
   /// its smaller footprint side. Coverage solves size glyphs against this.
   static let discCoverageRatio = 0.30
 
-  private let square: [PoofSourceCoverGlyph]
-  private let wide: [PoofSourceCoverGlyph]
-  private let tall: [PoofSourceCoverGlyph]
-
-  init(
-    square: [PoofSourceCoverGlyph],
-    wide: [PoofSourceCoverGlyph],
-    tall: [PoofSourceCoverGlyph]
-  ) {
-    self.square = square
-    self.wide = wide
-    self.tall = tall
-  }
-
-  func glyphs(for aspect: PoofSourceCoverAspect) -> [PoofSourceCoverGlyph] {
-    switch aspect {
-    case .square:
-      square
-    case .wide:
-      wide
-    case .tall:
-      tall
-    }
-  }
 }
 
 struct PoofFrameSet: Sendable {
@@ -170,11 +146,11 @@ struct PoofFrameSet: Sendable {
   let style: PoofStyle
   let variationSeed: UInt64
   private let poses: [[PoofGlyph]]
-  private let sourceCoverLayout: PoofSourceCoverLayout?
+  private let coverGlyphs: [PoofSourceCoverGlyph]?
   let sourceCoverAspect: PoofSourceCoverAspect?
 
   var coversSource: Bool {
-    sourceCoverLayout != nil
+    coverGlyphs != nil
   }
 
   init(
@@ -182,14 +158,14 @@ struct PoofFrameSet: Sendable {
     style: PoofStyle,
     variationSeed: UInt64,
     poses: [[PoofGlyph]],
-    sourceCoverLayout: PoofSourceCoverLayout?,
+    coverGlyphs: [PoofSourceCoverGlyph]?,
     sourceCoverAspect: PoofSourceCoverAspect?
   ) {
     self.configuration = configuration
     self.style = style
     self.variationSeed = variationSeed
     self.poses = poses
-    self.sourceCoverLayout = sourceCoverLayout
+    self.coverGlyphs = coverGlyphs
     self.sourceCoverAspect = sourceCoverAspect
   }
 
@@ -197,38 +173,14 @@ struct PoofFrameSet: Sendable {
     poses[pose.rawValue]
   }
 
-  /// The glyphs generated for an aspect, with no substitution.
-  ///
-  /// Playback should use ``sourceCoverGlyphs(for:)``. This answers what was
-  /// actually built, which is what proves the single-aspect generation path.
-  func storedSourceCoverGlyphs(
-    for aspect: PoofSourceCoverAspect
-  ) -> [PoofSourceCoverGlyph] {
-    sourceCoverLayout?.glyphs(for: aspect) ?? []
-  }
-
   func sourceCoverGlyphs(
-    for aspect: PoofSourceCoverAspect
+    for _: PoofSourceCoverAspect
   ) -> [PoofSourceCoverGlyph] {
-    guard let sourceCoverLayout else {
-      return []
-    }
-
-    let glyphs = sourceCoverLayout.glyphs(for: aspect)
-
-    guard glyphs.isEmpty else {
-      return glyphs
-    }
-
     // A layout built for one aspect class is asked for another when the source
     // is resized across the 1.4 ratio. Answer with the aspect that was built
     // rather than nothing, so the frame in flight before the rebuild lands
     // still draws smoke.
-    guard let sourceCoverAspect else {
-      return []
-    }
-
-    return sourceCoverLayout.glyphs(for: sourceCoverAspect)
+    coverGlyphs ?? []
   }
 }
 
@@ -246,10 +198,12 @@ enum PoofSimulation {
   static func makeFrameSet(
     configuration: PoofConfiguration,
     style: PoofStyle = .classic,
-    coversSource: Bool = true,
+    coversSource: Bool = false,
     sourceCoverAspect: PoofSourceCoverAspect? = nil,
     variationSeed: UInt64
   ) -> PoofFrameSet {
+    assert(coversSource == (sourceCoverAspect != nil))
+
     let poses = PoofPose.allCases.map { pose in
       (0..<glyphCount(for: pose, configuration: configuration))
         .compactMap { index in
@@ -262,17 +216,28 @@ enum PoofSimulation {
           )
         }
     }
-    let sourceCoverClusters =
-      (0..<glyphCount(
-        for: .clusters,
-        configuration: configuration
-      )).compactMap { index in
-        sourceCoverClusterGlyph(
-          at: index,
-          configuration: configuration,
-          style: style,
-          variationSeed: variationSeed
+    let coverGlyphs: [PoofSourceCoverGlyph]? =
+      if coversSource, let sourceCoverAspect {
+        organicSourceCoverGlyphs(
+          seed: sourceCoverGeometrySeed(for: variationSeed),
+          variationSeed: variationSeed,
+          clusterGlyphs: (0..<glyphCount(
+            for: .clusters,
+            configuration: configuration
+          )).compactMap { index in
+            sourceCoverClusterGlyph(
+              at: index,
+              configuration: configuration,
+              style: style,
+              variationSeed: variationSeed
+            )
+          },
+          sourceWidth: sourceCoverAspect.referenceWidth,
+          sourceHeight: sourceCoverAspect.referenceHeight,
+          keyOffset: sourceCoverAspect.coverKeyOffset
         )
+      } else {
+        nil
       }
 
     return PoofFrameSet(
@@ -280,15 +245,8 @@ enum PoofSimulation {
       style: style,
       variationSeed: variationSeed,
       poses: poses,
-      sourceCoverLayout:
-        coversSource
-        ? sourceCoverLayout(
-          seed: variationSeed,
-          clusterGlyphs: sourceCoverClusters,
-          aspect: sourceCoverAspect
-        )
-        : nil,
-      sourceCoverAspect: coversSource ? sourceCoverAspect : nil
+      coverGlyphs: coverGlyphs,
+      sourceCoverAspect: coverGlyphs == nil ? nil : sourceCoverAspect
     )
   }
 
@@ -1441,56 +1399,6 @@ enum PoofSimulation {
       paint: glyph.paint,
       rotation: glyph.rotation,
       tone: glyph.tone
-    )
-  }
-
-  private static func sourceCoverLayout(
-    seed: UInt64,
-    clusterGlyphs: [PoofGlyph],
-    aspect: PoofSourceCoverAspect?
-  ) -> PoofSourceCoverLayout {
-    let geometrySeed = sourceCoverGeometrySeed(for: seed)
-    let includesSquare = aspect == nil || aspect == .square
-    let includesWide = aspect == nil || aspect == .wide
-    let includesTall = aspect == nil || aspect == .tall
-    let square =
-      includesSquare
-      ? organicSourceCoverGlyphs(
-        seed: geometrySeed,
-        variationSeed: seed,
-        clusterGlyphs: clusterGlyphs,
-        sourceWidth: PoofSourceCoverAspect.square.referenceWidth,
-        sourceHeight: PoofSourceCoverAspect.square.referenceHeight,
-        keyOffset: PoofSourceCoverAspect.square.coverKeyOffset
-      )
-      : []
-    let wide =
-      includesWide
-      ? organicSourceCoverGlyphs(
-        seed: geometrySeed,
-        variationSeed: seed,
-        clusterGlyphs: clusterGlyphs,
-        sourceWidth: PoofSourceCoverAspect.wide.referenceWidth,
-        sourceHeight: PoofSourceCoverAspect.wide.referenceHeight,
-        keyOffset: PoofSourceCoverAspect.wide.coverKeyOffset
-      )
-      : []
-    let tall =
-      includesTall
-      ? organicSourceCoverGlyphs(
-        seed: geometrySeed,
-        variationSeed: seed,
-        clusterGlyphs: clusterGlyphs,
-        sourceWidth: PoofSourceCoverAspect.tall.referenceWidth,
-        sourceHeight: PoofSourceCoverAspect.tall.referenceHeight,
-        keyOffset: PoofSourceCoverAspect.tall.coverKeyOffset
-      )
-      : []
-
-    return PoofSourceCoverLayout(
-      square: square,
-      wide: wide,
-      tall: tall
     )
   }
 

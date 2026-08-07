@@ -517,24 +517,25 @@ struct PoofSimulationTests {
 
   @Test("Source-cover variation is coherent and repeatable")
   func stableSourceCoverVariation() throws {
-    let first = PoofSimulation.makeFrameSet(
-      configuration: PoofConfiguration(seed: 1),
-      variationSeed: 1
-    )
-    let repeated = PoofSimulation.makeFrameSet(
-      configuration: PoofConfiguration(seed: 1),
-      variationSeed: 1
-    )
-    let second = PoofSimulation.makeFrameSet(
-      configuration: PoofConfiguration(seed: 2),
-      variationSeed: 2
-    )
-
-    for aspect in [
-      PoofSourceCoverAspect.square,
-      .wide,
-      .tall,
-    ] {
+    for aspect in PoofSourceCoverAspect.allCases {
+      let first = PoofSimulation.makeFrameSet(
+        configuration: PoofConfiguration(seed: 1),
+        coversSource: true,
+        sourceCoverAspect: aspect,
+        variationSeed: 1
+      )
+      let repeated = PoofSimulation.makeFrameSet(
+        configuration: PoofConfiguration(seed: 1),
+        coversSource: true,
+        sourceCoverAspect: aspect,
+        variationSeed: 1
+      )
+      let second = PoofSimulation.makeFrameSet(
+        configuration: PoofConfiguration(seed: 2),
+        coversSource: true,
+        sourceCoverAspect: aspect,
+        variationSeed: 2
+      )
       let firstGlyphs = first.sourceCoverGlyphs(for: aspect)
       let repeatedGlyphs = repeated.sourceCoverGlyphs(for: aspect)
       let secondGlyphs = second.sourceCoverGlyphs(for: aspect)
@@ -552,6 +553,7 @@ struct PoofSimulationTests {
         }
       )
     }
+
     for item in [
       (
         aspect: PoofSourceCoverAspect.square,
@@ -566,6 +568,12 @@ struct PoofSimulationTests {
         size: CGSize(width: 48, height: 132)
       ),
     ] {
+      let first = PoofSimulation.makeFrameSet(
+        configuration: PoofConfiguration(seed: 1),
+        coversSource: true,
+        sourceCoverAspect: item.aspect,
+        variationSeed: 1
+      )
       let glyphs = first.sourceCoverGlyphs(for: item.aspect)
       let rootGlyphs =
         glyphs.prefix(PoofSourceCoverLayout.rootGlyphCount)
@@ -653,6 +661,7 @@ struct PoofSimulationTests {
     for aspect in PoofSourceCoverAspect.allCases {
       let frameSet = PoofSimulation.makeFrameSet(
         configuration: PoofConfiguration(seed: 42),
+        coversSource: true,
         sourceCoverAspect: aspect,
         variationSeed: 42
       )
@@ -665,15 +674,9 @@ struct PoofSimulationTests {
 
       for unusedAspect in PoofSourceCoverAspect.allCases
       where unusedAspect != aspect {
-        // Nothing is generated for the other aspects. Playback substitutes
-        // the built aspect rather than drawing nothing, so this asks the
-        // layout what it holds instead of what it would draw.
         #expect(
-          frameSet.storedSourceCoverGlyphs(for: unusedAspect).isEmpty
-        )
-        #expect(
-          frameSet.sourceCoverGlyphs(for: unusedAspect).count
-            == PoofSourceCoverLayout.glyphCount
+          frameSet.sourceCoverGlyphs(for: unusedAspect)
+            == frameSet.sourceCoverGlyphs(for: aspect)
         )
       }
     }

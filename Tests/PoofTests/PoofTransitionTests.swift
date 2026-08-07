@@ -174,6 +174,8 @@ struct PoofTransitionTests {
     let rect = CGRect(origin: .zero, size: size)
     let frameSet = PoofSimulation.makeFrameSet(
       configuration: PoofConfiguration(seed: 1),
+      coversSource: true,
+      sourceCoverAspect: .square,
       variationSeed: 1
     )
     let erosion = try #require(
@@ -250,6 +252,8 @@ struct PoofTransitionTests {
     let size = CGSize(width: 84, height: 84)
     let frameSet = PoofSimulation.makeFrameSet(
       configuration: PoofConfiguration(seed: 7),
+      coversSource: true,
+      sourceCoverAspect: .square,
       variationSeed: 7
     )
     let erosion = try #require(
