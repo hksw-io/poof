@@ -45,13 +45,17 @@ In Xcode, choose **File → Add Package Dependencies** and enter:
 https://github.com/hksw-io/poof.git
 ```
 
-Set the dependency rule to **Up to Next Major Version** starting at `1.1.0`.
+Set the dependency rule to **Exact Version** `1.1.0`.
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed between releases. A minor
+release may contain a breaking change, marked **Breaking** there, so pin an
+exact version.
 
 From the root of another Swift package, SwiftPM can add Poof and link its
 library product to a target:
 
 ```sh
-swift package add-dependency https://github.com/hksw-io/poof.git --from 1.1.0
+swift package add-dependency https://github.com/hksw-io/poof.git --exact 1.1.0
 swift package add-target-dependency Poof YourTarget --package poof
 ```
 
@@ -63,7 +67,7 @@ For a package manifest, add the package and product dependency:
 dependencies: [
   .package(
     url: "https://github.com/hksw-io/poof.git",
-    from: "1.1.0"
+    exact: "1.1.0"
   )
 ],
 targets: [
@@ -140,8 +144,10 @@ Pass a style when you want something other than the classic poof:
 .transition(.poof(style: .bloom))
 ```
 
-Color is separate from style. Every style is grayscale by default.
-Pass `.pastel` or your own colors when the removal should be colorful:
+Color is separate from style. Every style is grayscale by default, and
+`PoofPalette.automatic` and `.monochrome` both use those grayscale fills.
+Color is always opt-in: pass `.pastel` or your own colors through
+`PoofPalette(colors:)` when the removal should be colorful:
 
 ```swift
 let candy = PoofPalette(
@@ -161,12 +167,6 @@ RoundedRectangle(cornerRadius: 16)
     )
   )
 ```
-
-`PoofPalette.automatic` and `.monochrome` both use the default grayscale fills.
-Color is always opt-in through `.pastel` or `PoofPalette(colors:)`.
-
-Every poof uses the original one-third-second timing: five hard-swapped poses
-at fifteen frames per second.
 
 ### Options at a glance
 
@@ -327,13 +327,9 @@ the drawing field.
 
 ## Performance
 
-Poof generates seeded glyph descriptors once at playback start, and selects one
-pose from absolute progress. Drawing happens in one `Canvas`, with no timer,
-per-frame random work, or SwiftUI view per glyph. Glyph count and field size
-stay bounded. Progressive removal prepares coverage only for the source's
-laid-out aspect ratio, and solves its mask off the main thread — including the
-path booleans, which are settled at build time rather than left for the
-render pass to evaluate.
+Poof seeds its glyphs once per playback and draws in one `Canvas`, with no
+timer, per-frame random work, or SwiftUI view per glyph. Progressive removal
+solves its mask off the main thread.
 
 ## Clean-room scope
 
@@ -379,5 +375,3 @@ and repository conventions.
 ## License
 
 Poof is available under the [MIT License](LICENSE).
-
-Copyright © 2026 HK Softworks AB.

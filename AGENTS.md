@@ -93,3 +93,5 @@ later.
 - Use Conventional Commits, such as `feat:`, `fix:`, `test:`, `docs:`, and
   `chore:`.
 - Keep generated build output out of git.
+- A minor release may contain a breaking change, marked **Breaking** in
+  `CHANGELOG.md`, so consumers pin exact versions.
