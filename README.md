@@ -45,17 +45,17 @@ In Xcode, choose **File → Add Package Dependencies** and enter:
 https://github.com/hksw-io/poof.git
 ```
 
-Set the dependency rule to **Exact Version** `1.1.0`.
+Set the dependency rule to **Up to Next Major Version** from `1.1.0`.
 
-See [CHANGELOG.md](CHANGELOG.md) for what changed between releases. A minor
-release may contain a breaking change, marked **Breaking** there, so pin an
-exact version.
+See [CHANGELOG.md](CHANGELOG.md) for what changed between releases. Versions
+follow [Semantic Versioning](https://semver.org): a breaking change, marked
+**Breaking** there, comes only in a new major version.
 
 From the root of another Swift package, SwiftPM can add Poof and link its
 library product to a target:
 
 ```sh
-swift package add-dependency https://github.com/hksw-io/poof.git --exact 1.1.0
+swift package add-dependency https://github.com/hksw-io/poof.git --from 1.1.0
 swift package add-target-dependency Poof YourTarget --package poof
 ```
 
@@ -67,7 +67,7 @@ For a package manifest, add the package and product dependency:
 dependencies: [
   .package(
     url: "https://github.com/hksw-io/poof.git",
-    exact: "1.1.0"
+    from: "1.1.0"
   )
 ],
 targets: [
